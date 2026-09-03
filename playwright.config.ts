@@ -1,79 +1,56 @@
 import { defineConfig, devices } from '@playwright/test';
+import { env } from './src/utils/env';
 
 /**
- * Read environment variables from file.
- * https://github.com/motdotla/dotenv
+ * Naming conventions that control execution scope (see README.md):
+ *  - "*.api.spec.ts"      -> runs once, in the browserless "api" project
+ *  - "*.a11y.spec.ts",
+ *    "*.perf.spec.ts",
+ *    "*.security.spec.ts" -> chromium only, to limit load on the shared
+ *                            public demo site
+ *  - everything else       -> chromium, firefox and webkit, as usual
  */
-// import dotenv from 'dotenv';
-// import path from 'path';
-// dotenv.config({ path: path.resolve(__dirname, '.env') });
+const apiSpecs = /\.api\.spec\.ts$/;
+const chromiumOnlySpecs = /\.(a11y|perf|security)\.spec\.ts$/;
 
-/**
- * See https://playwright.dev/docs/test-configuration.
- */
 export default defineConfig({
   testDir: './tests',
-  /* Run tests in files in parallel */
   fullyParallel: true,
-  /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
+  // automationexercise.com is a small shared practice site, not
+  // infrastructure built for load: high worker counts have been observed to
+  // both time out navigations and, once, cause the server to bleed unrelated
+  // category text into a search response under concurrent hits (see
+  // docs/target-application.md, "known quirks"). A modest worker count plus
+  // one retry keeps the suite reliable without hammering someone else's site.
+  retries: process.env.CI ? 2 : 1,
+  workers: process.env.CI ? 1 : 2,
   reporter: 'html',
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
-    /* Base URL to use in actions like `await page.goto('')`. */
-    // baseURL: 'http://localhost:3000',
-
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
+    baseURL: env.baseURL,
     trace: 'on-first-retry',
+    navigationTimeout: 45_000,
   },
 
-  /* Configure projects for major browsers */
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: [apiSpecs],
     },
-
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
+      testIgnore: [apiSpecs, chromiumOnlySpecs],
     },
-
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
+      testIgnore: [apiSpecs, chromiumOnlySpecs],
     },
-
-    /* Test against mobile viewports. */
-    // {
-    //   name: 'Mobile Chrome',
-    //   use: { ...devices['Pixel 5'] },
-    // },
-    // {
-    //   name: 'Mobile Safari',
-    //   use: { ...devices['iPhone 12'] },
-    // },
-
-    /* Test against branded browsers. */
-    // {
-    //   name: 'Microsoft Edge',
-    //   use: { ...devices['Desktop Edge'], channel: 'msedge' },
-    // },
-    // {
-    //   name: 'Google Chrome',
-    //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
-    // },
+    {
+      name: 'api',
+      testMatch: [apiSpecs],
+    },
   ],
-
-  /* Run your local dev server before starting the tests */
-  // webServer: {
-  //   command: 'npm run start',
-  //   url: 'http://localhost:3000',
-  //   reuseExistingServer: !process.env.CI,
-  // },
 });

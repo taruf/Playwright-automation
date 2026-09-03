@@ -1,15 +1,33 @@
 {
   "name": "qa-automation-playwright",
   "version": "1.0.0",
-  "description": "",
+  "description": "Playwright + TypeScript QA automation learning repo, built around automationexercise.com",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:fundamentals": "playwright test tests/fundamentals",
+    "test:quality-and-migration": "playwright test tests/quality-and-migration",
+    "test:advanced": "playwright test tests/advanced",
+    "report": "playwright show-report",
+    "codegen": "playwright codegen https://automationexercise.com",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@eslint/js": "^9.19.0",
     "@playwright/test": "^1.62.1",
-    "@types/node": "^26.2.0"
+    "@types/node": "^26.2.0",
+    "eslint": "^9.19.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-playwright": "^2.2.0",
+    "prettier": "^3.4.2",
+    "typescript-eslint": "^8.21.0"
   }
 }

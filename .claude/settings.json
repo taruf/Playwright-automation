@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node _probe7.js)",
+      "Bash(node _probe8.js)",
+      "Bash(rm -f d:/qa-automation-playwright/_probe*.js)",
+      "Bash(git rm *)",
+      "Bash(npx tsc *)",
+      "Bash(npx prettier *)"
+    ],
+    "additionalDirectories": [
+      "d:\\qa-automation-playwright"
+    ]
+  }
+}
