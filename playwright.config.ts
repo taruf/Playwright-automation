@@ -25,6 +25,14 @@ export default defineConfig({
   // one retry keeps the suite reliable without hammering someone else's site.
   retries: process.env.CI ? 2 : 1,
   workers: process.env.CI ? 1 : 2,
+  // Playwright's default (30s) is a per-TEST budget, not a per-action one.
+  // A multi-step flow (signup -> cart -> checkout -> payment -> confirm ->
+  // delete, e.g. flow-03) chains several real round-trips against a real,
+  // occasionally slow site, and can approach 30s on total time alone even
+  // when every individual action is comfortably within its own timeout -
+  // confirmed live: a "page.goto: Test timeout of 30000ms exceeded" on the
+  // final cleanup step, despite that goto being fine in isolation.
+  timeout: 60_000,
   reporter: 'html',
   use: {
     baseURL: env.baseURL,

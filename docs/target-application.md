@@ -86,6 +86,13 @@ Dress"` read back as just `"Sleeveless"`). Because it can also alter text
   independent of the ad-injection issue above - this small public site isn't
   provisioned for heavy parallel load. It's why local `workers` is capped at
   2 with 1 retry rather than left at the default.
+- **"Proceed To Checkout" occasionally doesn't register its click.** Reproduced
+  both outcomes (navigates to `/checkout`; silently stays on `/view_cart`)
+  from an identical script with no code difference between runs - confirmed
+  it's not a locator problem (the element resolves uniquely both times).
+  `CartPage.proceedToCheckout()` verifies the navigation actually happened
+  and retries the click once if it didn't, rather than the whole test
+  eating a long timeout on it.
 - **The homepage has real, pre-existing accessibility violations.** An axe
   scan finds 1 button-name, 41 color-contrast, and 4 link-name violations
   (all serious/critical) - not something this repo can fix upstream.
