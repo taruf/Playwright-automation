@@ -79,9 +79,4 @@ test.describe('locators', () => {
     await viewCartLink.click();
     await expect(page).toHaveURL(/\/view_cart$/);
   });
-
-  test('temporary rule check', async ({ page }) => {
-  await page.locator('.some-class span').click();
-});
-
 });

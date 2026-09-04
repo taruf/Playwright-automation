@@ -34,6 +34,19 @@ export class CartPage extends BasePage {
   }
 
   async proceedToCheckout(): Promise<void> {
+    // "Proceed To Checkout" is a real, unique element (confirmed live: it's
+    // an <a> with no href, same fake-link-as-button pattern as "Add to
+    // cart") - but the click occasionally doesn't register as a real user
+    // gesture to the site's own JS, leaving the page stuck on /view_cart
+    // with no error. Confirmed by reproducing both outcomes from an
+    // identical script - this is the site's flakiness, not a locator
+    // problem, so one retry (rather than a longer timeout) is the fix.
     await this.proceedToCheckoutButton.click();
+    try {
+      await this.page.waitForURL(/\/checkout$/, { timeout: 5_000 });
+    } catch {
+      await this.proceedToCheckoutButton.click();
+      await this.page.waitForURL(/\/checkout$/, { timeout: 10_000 });
+    }
   }
 }
