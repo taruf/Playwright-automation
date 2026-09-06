@@ -42,7 +42,7 @@ test.describe('assertions and auto-waiting', () => {
     //   const text = await page.locator('title-that-loads-late').textContent();
     //   expect(text).toBe('Automation Exercise'); // no retry - flaky under load
 
-    // GOOD: let the assertion itself do the polling.
+  
     await expect(page).toHaveTitle('Automation Exercise');
   });
 });
