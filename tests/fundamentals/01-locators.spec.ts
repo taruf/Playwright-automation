@@ -20,7 +20,7 @@ test.describe('locators', () => {
     // space). An exact match against the trimmed string finds nothing - not
     // because the element is missing, but because the name isn't quite what
     // it looks like. A loose (substring) match is the right tool here.
-    await expect(page.getByRole('link', { name: 'Signup / Login', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Signup / Login', exact: false })).toBeVisible();
   });
 
   test('every product card duplicates its "Add to cart" link - strict mode catches it', async ({
