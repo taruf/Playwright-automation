@@ -14,7 +14,7 @@ test.describe('assertions and auto-waiting', () => {
     // The search results are injected by AJAX after the click - there is no
     // full page navigation to await. expect(...).toBeVisible() polls until
     // the heading exists instead of failing immediately.
-    await productsPage.search('Shorts');
+    await productsPage.search('Dress');
     await expect(productsPage.searchedProductsHeading).toBeVisible();
     await expect(productsPage.productCards.first()).toBeVisible();
   });
@@ -23,7 +23,7 @@ test.describe('assertions and auto-waiting', () => {
     productsPage,
   }) => {
     await productsPage.goto();
-    await productsPage.search('Shorts');
+    await productsPage.search('Dress');
 
     // Anti-pattern to avoid: reading .length off a snapshot array taken
     // immediately after the click would race the AJAX response.
@@ -41,7 +41,6 @@ test.describe('assertions and auto-waiting', () => {
     // retrying:
     //   const text = await page.locator('title-that-loads-late').textContent();
     //   expect(text).toBe('Automation Exercise'); // no retry - flaky under load
-
   
     await expect(page).toHaveTitle('Automation Exercise');
   });
