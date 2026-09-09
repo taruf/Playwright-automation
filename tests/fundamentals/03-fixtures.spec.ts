@@ -9,8 +9,6 @@ import { test, expect } from '@fixtures/fixtures';
  */
 test.describe('fixtures and organization', () => {
   test.beforeEach(async ({ homePage }) => {
-    // Shared setup lives in one beforeEach instead of being repeated in
-    // every test body.
     await homePage.goto();
   });
 
