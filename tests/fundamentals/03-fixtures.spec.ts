@@ -22,7 +22,7 @@ test.describe('fixtures and organization', () => {
     // freely (see hybrid/api-setup-ui-verify.spec.ts for a full example).
     const { responseCode, products } = await apiClient.getProductsList();
     expect(responseCode).toBe(200);
-    expect(products.length).toBeGreaterThan(0);
+    expect(products.length).toBeGreaterThan(5);
   });
 
   test('test.step breaks a multi-part flow into a readable report', async ({
