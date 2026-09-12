@@ -45,17 +45,32 @@ test.describe('fixtures and organization', () => {
   });
 });
 
-// A fixture body is split by `await use(...)`: everything before it is setup,
-// everything after it is teardown. This fixture is defined here, local to
-// this file (via `test.extend`), rather than added to fixtures.ts, since
-// nothing else needs it - it exists only to make that split observable.
+/**
+ * Every fixture function has the same shape:
+ *
+ *   async ({ ...deps }, use) => {
+ *     // 1. SETUP   - runs once, before the test body, to build the value
+ *     await use(theValue);
+ *     // 2. TEARDOWN - runs once the test body has *returned*, to release it
+ *   }
+ *
+ * `use(...)` is the pause button: the fixture function is suspended on that
+ * line for as long as the test is running, then resumes into its own
+ * teardown code the moment the test finishes (pass, fail, or throw - the
+ * line after `use()` still runs, the same way a `finally` block would).
+ *
+ * The fixture below is declared with `test.extend` right here in the spec
+ * file, not added to src/fixtures/fixtures.ts, because it isn't a real page
+ * object or API client - it only exists to make the setup/teardown split
+ * visible via the `executionOrder` array.
+ */
 const executionOrder: string[] = [];
 
 const fixtureTeardownTest = test.extend<{ trackedResource: void }>({
   trackedResource: async ({}, use) => {
-    executionOrder.push('setup'); // runs before the test body
+    executionOrder.push('setup'); // before `use()` -> runs before the test body
     await use();
-    executionOrder.push('teardown'); // runs once the test body has returned
+    executionOrder.push('teardown'); // after `use()` -> runs after the test body
   },
 });
 
@@ -64,16 +79,18 @@ fixtureTeardownTest.describe('fixture teardown - the code after `use()`', () => 
     'a fixture keeps running after the test body returns to release what it set up',
     async ({ trackedResource }) => {
       executionOrder.push('test body');
-      // Teardown hasn't happened yet here - the fixture is paused at
-      // `await use()` for as long as this test function is running.
+      // Teardown can't have happened yet: the fixture function is still
+      // paused at `await use()`, waiting for this very test function to
+      // return before it continues on to its own teardown line.
       expect(executionOrder).toEqual(['setup', 'test body']);
     },
   );
 
   fixtureTeardownTest.afterAll(() => {
-    // Fixture teardown runs after the test (and any afterEach hooks) but
-    // before afterAll, so by now 'teardown' is guaranteed to have been
-    // pushed.
+    // Full order for one test: fixture setup -> beforeEach hooks (none here)
+    // -> test body -> afterEach hooks (none here) -> fixture teardown ->
+    // afterAll. Teardown always lands before afterAll, so 'teardown' is
+    // guaranteed to already be in the array by the time this runs.
     expect(executionOrder).toEqual(['setup', 'test body', 'teardown']);
   });
 });
