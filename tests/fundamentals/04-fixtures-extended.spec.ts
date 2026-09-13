@@ -49,7 +49,7 @@ test.describe('fixtures and organization', () => {
  * Every fixture function has the same shape:
  *
  *   async ({ ...deps }, use) => {
- *     // 1. SETUP   - runs once, before the test body, to build the value
+ *     // 1. SETUP    - runs once, before the test body, to build the value
  *     await use(theValue);
  *     // 2. TEARDOWN - runs once the test body has *returned*, to release it
  *   }
@@ -58,6 +58,38 @@ test.describe('fixtures and organization', () => {
  * line for as long as the test is running, then resumes into its own
  * teardown code the moment the test finishes (pass, fail, or throw - the
  * line after `use()` still runs, the same way a `finally` block would).
+ *
+ * Not every fixture needs a teardown half. `apiClient` in fixtures.ts is
+ * setup-only - `await use(new ApiClient(request, env.apiBaseURL))` with
+ * nothing after it - because Playwright's own `request` context is what
+ * needs releasing, and Playwright releases that itself. Compare that to a
+ * fixture that would genuinely leak state without a teardown line, e.g.
+ * (illustrative - not an actual fixture in this repo):
+ *
+ *   loggedInUser: async ({ signupLoginPage, homePage }, use) => {
+ *     await signupLoginPage.login(email, password);   // SETUP
+ *     await use(email);
+ *     await homePage.logoutLink.click();               // TEARDOWN
+ *   }
+ *
+ * Skip that last line and every test after the one using `loggedInUser`
+ * would inherit an already-authenticated browser context - the teardown
+ * half is what keeps fixtures composable instead of bleeding state from one
+ * test into the next.
+ *
+ * Two more things this file's fixture is deliberately minimal about, that a
+ * fixture with real dependencies/output wouldn't be:
+ *  - `{}` as the first argument means `trackedResource` doesn't depend on
+ *    any other fixture. `loggedInUser` above, by contrast, destructures
+ *    `signupLoginPage` and `homePage` out of that same first argument to get
+ *    page objects it can act through - fixtures can depend on other
+ *    fixtures the same way a test does.
+ *  - The fixture's type is `void` - it hands the test nothing to read, so
+ *    `trackedResource` is destructured in the test's args below but never
+ *    referenced in the test body. That destructuring still matters: it's
+ *    what tells Playwright to run this fixture for this test at all. A
+ *    fixture never named in a test's argument list never executes, setup or
+ *    teardown, for that test.
  *
  * The fixture below is declared with `test.extend` right here in the spec
  * file, not added to src/fixtures/fixtures.ts, because it isn't a real page
