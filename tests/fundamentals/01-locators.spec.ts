@@ -66,7 +66,7 @@ test.describe('locators', () => {
     await expect(firstCard.locator('.productinfo p')).toHaveText('Blue Top');
   });
 
-  test('test wrapper locator', async ({ page }) => {
+  test('adding a product opens the view cart link in the confirmation modal', async ({ page }) => {
     await page.goto('/');
 
     const firstCard = page.locator(

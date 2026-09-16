@@ -107,8 +107,17 @@ const fixtureTeardownTest = test.extend<{ trackedResource: void }>({
 });
 
 fixtureTeardownTest.describe('fixture teardown - the code after `use()`', () => {
+  fixtureTeardownTest.afterAll(() => {
+    // Full order for one test: fixture setup -> beforeEach hooks (none here)
+    // -> test body -> afterEach hooks (none here) -> fixture teardown ->
+    // afterAll. Teardown always lands before afterAll, so 'teardown' is
+    // guaranteed to already be in the array by the time this runs.
+    expect(executionOrder).toEqual(['setup', 'test body', 'teardown']);
+  });
+
   fixtureTeardownTest(
     'a fixture keeps running after the test body returns to release what it set up',
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring the fixture is what triggers its setup/teardown; the value itself isn't needed here.
     async ({ trackedResource }) => {
       executionOrder.push('test body');
       // Teardown can't have happened yet: the fixture function is still
@@ -117,12 +126,4 @@ fixtureTeardownTest.describe('fixture teardown - the code after `use()`', () => 
       expect(executionOrder).toEqual(['setup', 'test body']);
     },
   );
-
-  fixtureTeardownTest.afterAll(() => {
-    // Full order for one test: fixture setup -> beforeEach hooks (none here)
-    // -> test body -> afterEach hooks (none here) -> fixture teardown ->
-    // afterAll. Teardown always lands before afterAll, so 'teardown' is
-    // guaranteed to already be in the array by the time this runs.
-    expect(executionOrder).toEqual(['setup', 'test body', 'teardown']);
-  });
 });

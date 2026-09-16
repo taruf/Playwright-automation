@@ -10,6 +10,12 @@ module.exports = tseslint.config(
   {
     files: ['tests/**/*.ts'],
     plugins: { playwright },
+    settings: {
+      // fixtureTeardownTest is `test.extend(...)` under a different name;
+      // without this alias, playwright/no-standalone-expect can't tell it's
+      // a test block and flags its `expect` calls as standalone.
+      playwright: { globalAliases: { test: ['fixtureTeardownTest'] } },
+    },
     rules: {
       ...playwright.configs['flat/recommended'].rules,
     },
