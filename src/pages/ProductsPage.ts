@@ -13,6 +13,7 @@ export class ProductsPage extends BasePage {
 
   // product detail page
   readonly productName: Locator;
+  readonly productPrice: Locator;
   readonly quantityInput: Locator;
   readonly addToCartButton: Locator;
 
@@ -31,6 +32,10 @@ export class ProductsPage extends BasePage {
     this.viewCartLink = this.cartModal.getByRole('link', { name: 'View Cart' });
 
     this.productName = page.locator('.product-information h2');
+    // No id/class on the price text itself - it's the first of two nested
+    // <span>s in the same block as the quantity input and "Add to cart"
+    // button (confirmed via the live product_details markup).
+    this.productPrice = page.locator('.product-information span span').first();
     this.quantityInput = page.locator('#quantity');
     this.addToCartButton = page.locator('button.cart');
   }
