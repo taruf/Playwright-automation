@@ -43,4 +43,19 @@ test.describe('fixtures and organization', () => {
       await expect(homePage.productsLink).toBeVisible();
     });
   });
+
+  test.describe('narrowing an option to one group of tests', () => {
+    // test.use() overrides a built-in Playwright option (or a custom fixture
+    // value - see src/fixtures/fixtures.ts) for every test in this describe
+    // block only. Every other test in this file still runs at the project's
+    // default desktop viewport; this nested block, and its own beforeEach
+    // (inherited from the outer describe above), run at a mobile-sized one.
+    test.use({ viewport: { width: 400, height: 800 } });
+
+    test('test.use() scopes a viewport override to this describe block, not the whole file', async ({
+      page,
+    }) => {
+      expect(page.viewportSize()).toEqual({ width: 400, height: 800 });
+    });
+  });
 });
