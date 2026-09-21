@@ -44,6 +44,22 @@ test.describe('fixtures and organization', () => {
     });
   });
 
+  test(
+    'tags mark a test for selective runs, e.g. `npx playwright test --grep @smoke`',
+    { tag: '@smoke' },
+    async ({ homePage }) => {
+      // A tag is metadata, not behavior - Playwright's CLI (--grep /
+      // --grep-invert) and playwright.config.ts's own `grep` option can
+      // filter on it, so a CI job can run just the tagged subset instead of
+      // the whole suite. @smoke conventionally marks the handful of checks
+      // worth running on every deploy - here, that the header's main nav
+      // actually renders.
+      await expect(homePage.productsLink).toBeVisible();
+      await expect(homePage.cartLink).toBeVisible();
+      await expect(homePage.signupLoginLink).toBeVisible();
+    },
+  );
+
   test.describe('narrowing an option to one group of tests', () => {
     // test.use() overrides a built-in Playwright option (or a custom fixture
     // value - see src/fixtures/fixtures.ts) for every test in this describe
