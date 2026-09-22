@@ -95,6 +95,12 @@ test.describe('fixtures and organization', () => {
  * file, not added to src/fixtures/fixtures.ts, because it isn't a real page
  * object or API client - it only exists to make the setup/teardown split
  * visible via the `executionOrder` array.
+ *
+ * `loggedInUser` above is illustrative only - see
+ * `dependentFixturesTest` further down for that same "a fixture depends on
+ * another fixture" idea as real, running code (kept abstract - `outer` /
+ * `inner` - instead of domain fixtures, so the order it produces is the only
+ * thing being demonstrated).
  */
 const executionOrder: string[] = [];
 
@@ -124,6 +130,50 @@ fixtureTeardownTest.describe('fixture teardown - the code after `use()`', () => 
       // paused at `await use()`, waiting for this very test function to
       // return before it continues on to its own teardown line.
       expect(executionOrder).toEqual(['setup', 'test body']);
+    },
+  );
+});
+
+const dependencyOrder: string[] = [];
+
+const dependentFixturesTest = test.extend<{ outer: void; inner: void }>({
+  outer: async ({}, use) => {
+    dependencyOrder.push('outer setup');
+    await use();
+    dependencyOrder.push('outer teardown');
+  },
+  // Destructuring `outer` out of the first argument is what makes `inner`
+  // depend on it - the same way a test depends on a fixture by naming it in
+  // its own argument list. Playwright resolves dependencies before
+  // dependents, so `outer`'s setup always runs before `inner`'s.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring `outer` is what declares the dependency; the value itself isn't needed here.
+  inner: async ({ outer }, use) => {
+    dependencyOrder.push('inner setup');
+    await use();
+    dependencyOrder.push('inner teardown');
+  },
+});
+
+dependentFixturesTest.describe('fixture dependencies - one fixture using another', () => {
+  dependentFixturesTest.afterAll(() => {
+    // Setup runs in dependency order (outer, then inner, since inner needs
+    // outer to exist first); teardown unwinds in the opposite order (inner,
+    // then outer) - the same LIFO order nested `finally` blocks would give.
+    expect(dependencyOrder).toEqual([
+      'outer setup',
+      'inner setup',
+      'test body',
+      'inner teardown',
+      'outer teardown',
+    ]);
+  });
+
+  dependentFixturesTest(
+    'a fixture that depends on another gets it set up first and torn down last',
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring `inner` is what triggers both fixtures' setup/teardown; the value itself isn't needed here.
+    async ({ inner }) => {
+      dependencyOrder.push('test body');
+      expect(dependencyOrder).toEqual(['outer setup', 'inner setup', 'test body']);
     },
   );
 });
