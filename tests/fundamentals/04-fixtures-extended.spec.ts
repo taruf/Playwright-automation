@@ -177,3 +177,38 @@ dependentFixturesTest.describe('fixture dependencies - one fixture using another
     },
   );
 });
+
+/**
+ * `{ auto: true }` is the one exception to the rule stated above ("a fixture
+ * never named in a test's argument list never executes"): an auto fixture
+ * runs for every test in its scope whether or not the test ever destructures
+ * it - useful for a cross-cutting step (seeding state, starting a trace,
+ * asserting on console errors) that every test needs without every test
+ * having to remember to ask for it.
+ */
+const autoFixtureOrder: string[] = [];
+
+const autoFixtureTest = test.extend<{ tracker: void }>({
+  tracker: [
+    async ({}, use) => {
+      autoFixtureOrder.push('auto setup');
+      await use();
+      autoFixtureOrder.push('auto teardown');
+    },
+    { auto: true },
+  ],
+});
+
+autoFixtureTest.describe('automatic fixtures - the exception to "never named, never runs"', () => {
+  autoFixtureTest.afterAll(() => {
+    expect(autoFixtureOrder).toEqual(['auto setup', 'test body', 'auto teardown']);
+  });
+
+  autoFixtureTest('an auto fixture runs even though this test never destructures it', async () => {
+    // No fixture at all is named in this test's argument list - an ordinary
+    // fixture (like `trackedResource` or `inner` above) would simply never
+    // run for it. `tracker`'s `{ auto: true }` option is what runs it anyway.
+    autoFixtureOrder.push('test body');
+    expect(autoFixtureOrder).toEqual(['auto setup', 'test body']);
+  });
+});
