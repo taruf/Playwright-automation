@@ -237,27 +237,33 @@ const workerScopedTest = test.extend<{}, { sharedId: number }>({
   ],
 });
 
-workerScopedTest.describe('worker-scoped fixtures - set up once, reused by every test in the worker', () => {
-  // Serial mode is what makes this demonstration reliable: it guarantees
-  // both tests below run in the same worker process. Without it, this
-  // project's `fullyParallel: true` could schedule them onto separate
-  // workers - and a worker-scoped fixture gets its own fresh instance per
-  // worker, which would quietly break the exact thing being shown here.
-  workerScopedTest.describe.configure({ mode: 'serial' });
+workerScopedTest.describe(
+  'worker-scoped fixtures - set up once, reused by every test in the worker',
+  () => {
+    // Serial mode is what makes this demonstration reliable: it guarantees
+    // both tests below run in the same worker process. Without it, this
+    // project's `fullyParallel: true` could schedule them onto separate
+    // workers - and a worker-scoped fixture gets its own fresh instance per
+    // worker, which would quietly break the exact thing being shown here.
+    workerScopedTest.describe.configure({ mode: 'serial' });
 
-  workerScopedTest('the first test in the worker triggers the fixture setup', async ({ sharedId }) => {
-    expect(sharedId).toBe(1);
-    expect(workerSetupCalls).toHaveLength(1);
-  });
+    workerScopedTest(
+      'the first test in the worker triggers the fixture setup',
+      async ({ sharedId }) => {
+        expect(sharedId).toBe(1);
+        expect(workerSetupCalls).toHaveLength(1);
+      },
+    );
 
-  workerScopedTest(
-    'a second test in the same worker reuses that instance instead of building a new one',
-    async ({ sharedId }) => {
-      // Same value as the previous test, and setup still only ran once -
-      // a test-scoped fixture like `trackedResource` would have set up
-      // fresh again here.
-      expect(sharedId).toBe(1);
-      expect(workerSetupCalls).toHaveLength(1);
-    },
-  );
-});
+    workerScopedTest(
+      'a second test in the same worker reuses that instance instead of building a new one',
+      async ({ sharedId }) => {
+        // Same value as the previous test, and setup still only ran once -
+        // a test-scoped fixture like `trackedResource` would have set up
+        // fresh again here.
+        expect(sharedId).toBe(1);
+        expect(workerSetupCalls).toHaveLength(1);
+      },
+    );
+  },
+);
