@@ -212,3 +212,52 @@ autoFixtureTest.describe('automatic fixtures - the exception to "never named, ne
     expect(autoFixtureOrder).toEqual(['auto setup', 'test body']);
   });
 });
+
+/**
+ * Every fixture above is test-scoped (Playwright's default): set up fresh
+ * and torn down once per test, exactly like `trackedResource` at the top of
+ * this file. `{ scope: 'worker' }` changes that - the fixture is set up
+ * once per worker *process* and the same instance is handed to every test
+ * in that worker that asks for it, only torn down when the worker itself
+ * shuts down. Good for something genuinely expensive to build that doesn't
+ * need per-test isolation (a shared auth session, a DB connection pool);
+ * wrong for anything a test mutates, since every test in the worker shares
+ * that exact instance.
+ */
+const workerSetupCalls: number[] = [];
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Playwright's own signature for "no test-scoped fixtures, only worker-scoped" is test.extend<{}, WorkerFixtures>(); Record<string, never> looks equivalent but breaks type inference on the fixture's provided value here.
+const workerScopedTest = test.extend<{}, { sharedId: number }>({
+  sharedId: [
+    async ({}, use) => {
+      workerSetupCalls.push(workerSetupCalls.length + 1);
+      await use(workerSetupCalls.length);
+    },
+    { scope: 'worker' },
+  ],
+});
+
+workerScopedTest.describe('worker-scoped fixtures - set up once, reused by every test in the worker', () => {
+  // Serial mode is what makes this demonstration reliable: it guarantees
+  // both tests below run in the same worker process. Without it, this
+  // project's `fullyParallel: true` could schedule them onto separate
+  // workers - and a worker-scoped fixture gets its own fresh instance per
+  // worker, which would quietly break the exact thing being shown here.
+  workerScopedTest.describe.configure({ mode: 'serial' });
+
+  workerScopedTest('the first test in the worker triggers the fixture setup', async ({ sharedId }) => {
+    expect(sharedId).toBe(1);
+    expect(workerSetupCalls).toHaveLength(1);
+  });
+
+  workerScopedTest(
+    'a second test in the same worker reuses that instance instead of building a new one',
+    async ({ sharedId }) => {
+      // Same value as the previous test, and setup still only ran once -
+      // a test-scoped fixture like `trackedResource` would have set up
+      // fresh again here.
+      expect(sharedId).toBe(1);
+      expect(workerSetupCalls).toHaveLength(1);
+    },
+  );
+});
