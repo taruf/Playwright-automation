@@ -21,14 +21,30 @@ test.describe('assertions and auto-waiting', () => {
 
   test('toHaveCount waits for the final number of matches, not the first render', async ({
     productsPage,
+    apiClient,
   }) => {
     await productsPage.goto();
+
+    // Ground truth from the API, not a hardcoded number - this is a shared
+    // public site, so the catalog (and therefore the match count for
+    // "Dress") isn't guaranteed to stay fixed forever (see flow-01-* for the
+    // same reasoning applied to product names instead of a count).
+    const { products } = await apiClient.searchProduct('Dress');
+
     await productsPage.search('Dress');
 
-    // Anti-pattern to avoid: reading .length off a snapshot array taken
-    // immediately after the click would race the AJAX response.
-    const count = await productsPage.productCards.count();
-    expect(count).toBeGreaterThan(0);
+    // Anti-pattern to avoid (confirmed live, not assumed): productsPage.search()
+    // returns as soon as the click fires, before the AJAX results have
+    // rendered. A plain snapshot read right after it -
+    //   const count = await productsPage.productCards.count();
+    //   expect(count).toBeGreaterThan(0);
+    // - can catch the pre-search count instead of the filtered one, and
+    // `toBeGreaterThan(0)` is too weak an assertion to ever notice, since
+    // both counts are greater than zero. toHaveCount doesn't have that gap:
+    // it retries until the locator's match count reaches the expected
+    // number (or times out), so it needs no separate "wait for the heading"
+    // step first.
+    await expect(productsPage.productCards).toHaveCount(products.length);
   });
 
   test('an anti-pattern worth recognizing: a snapshot read fights auto-waiting', async ({
@@ -43,5 +59,24 @@ test.describe('assertions and auto-waiting', () => {
     //   expect(text).toBe('Automation Exercise'); // no retry - flaky under load
   
     await expect(page).toHaveTitle('Automation Exercise');
+  });
+
+  test('expect.poll retries an arbitrary function, not just a locator', async ({
+    productsPage,
+    apiClient,
+  }) => {
+    await productsPage.goto();
+
+    const { products } = await apiClient.searchProduct('Dress');
+    await productsPage.search('Dress');
+
+    // toHaveCount above only works because productCards is a Locator.
+    // expect.poll is the general-purpose version of the same idea: it
+    // retries ANY async function - here, deliberately the same .count()
+    // snapshot the test above warns is flaky on its own - until the return
+    // value satisfies the matcher, or it times out. Reach for this whenever
+    // the thing you need to wait on isn't expressible as a Locator (a
+    // computed value, a call combining several fixtures, a database read).
+    await expect.poll(() => productsPage.productCards.count()).toBe(products.length);
   });
 });
