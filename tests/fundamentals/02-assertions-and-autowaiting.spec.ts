@@ -57,7 +57,7 @@ test.describe('assertions and auto-waiting', () => {
     // retrying:
     //   const text = await page.locator('title-that-loads-late').textContent();
     //   expect(text).toBe('Automation Exercise'); // no retry - flaky under load
-  
+
     await expect(page).toHaveTitle('Automation Exercise');
   });
 
