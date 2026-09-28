@@ -79,4 +79,21 @@ test.describe('assertions and auto-waiting', () => {
     // computed value, a call combining several fixtures, a database read).
     await expect.poll(() => productsPage.productCards.count()).toBe(products.length);
   });
+
+  test('actions auto-wait too, not just assertions', async ({ productsPage }) => {
+    await productsPage.goto();
+    await productsPage.search('Dress');
+
+    // Every test above waits via expect(...) before touching the page again.
+    // This one doesn't - no wait for searchedProductsHeading, no
+    // expect(...).toBeVisible() first. .click() has its own, separate
+    // auto-waiting: it retries until its target exists, is visible, stable,
+    // and able to receive events, before ever acting. Confirmed live (took
+    // ~4s against the real AJAX response): this reliably reaches a product's
+    // detail page even though the search results haven't rendered yet the
+    // instant search() returns - the click itself is what waits.
+    await productsPage.productCards.first().getByRole('link', { name: 'View Product' }).click();
+
+    await expect(productsPage.productName).toBeVisible();
+  });
 });
