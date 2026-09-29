@@ -96,4 +96,34 @@ test.describe('assertions and auto-waiting', () => {
 
     await expect(productsPage.productName).toBeVisible();
   });
+
+  test('expect.soft records a failure but lets the test keep running, unlike a normal expect', async ({
+    page,
+  }) => {
+    // Deliberately designed to fail, to demonstrate the contrast below
+    // honestly instead of faking a pass. test.fail() tells Playwright this
+    // test is expected to fail - if it does, the run is reported as an
+    // expected failure (still green in the summary), not a real one.
+    test.fail();
+
+    await page.goto('/');
+
+    const reached: string[] = [];
+
+    // A normal expect() throws the instant it fails, aborting the test
+    // right there. expect.soft() records the failure and lets execution
+    // continue - useful for checking several independent things without one
+    // early failure hiding the rest.
+    await expect.soft(page.locator('#does-not-exist-a')).toBeVisible();
+    reached.push('after first soft assertion');
+
+    await expect.soft(page.locator('#does-not-exist-b')).toBeVisible();
+    reached.push('after second soft assertion');
+
+    // Both pushes running - instead of execution stopping dead at the first
+    // soft failure - is the proof. The test still ends up failed overall
+    // (Playwright fails a test with any soft-assertion failures once it
+    // finishes), which is exactly what test.fail() above expects.
+    expect(reached).toEqual(['after first soft assertion', 'after second soft assertion']);
+  });
 });
