@@ -28,6 +28,16 @@ export interface ProductsListResponse {
   products: Product[];
 }
 
+export interface Brand {
+  id: number;
+  brand: string;
+}
+
+export interface BrandsListResponse {
+  responseCode: number;
+  brands: Brand[];
+}
+
 export interface MessageResponse {
   responseCode: number;
   message: string;

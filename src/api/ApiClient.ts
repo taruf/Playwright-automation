@@ -1,5 +1,10 @@
 import type { APIRequestContext } from '@playwright/test';
-import { endpoints, type MessageResponse, type ProductsListResponse } from './endpoints';
+import {
+  endpoints,
+  type BrandsListResponse,
+  type MessageResponse,
+  type ProductsListResponse,
+} from './endpoints';
 
 export interface NewAccountPayload {
   name: string;
@@ -34,6 +39,11 @@ export class ApiClient {
 
   async getProductsList(): Promise<ProductsListResponse> {
     const response = await this.request.get(`${this.baseURL}${endpoints.productsList}`);
+    return response.json();
+  }
+
+  async getBrandsList(): Promise<BrandsListResponse> {
+    const response = await this.request.get(`${this.baseURL}${endpoints.brandsList}`);
     return response.json();
   }
 
