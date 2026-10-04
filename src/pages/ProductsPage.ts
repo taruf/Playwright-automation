@@ -6,6 +6,7 @@ export class ProductsPage extends BasePage {
   readonly searchButton: Locator;
   readonly productCards: Locator;
   readonly productNames: Locator;
+  readonly productImages: Locator;
   readonly searchedProductsHeading: Locator;
   readonly cartModal: Locator;
   readonly continueShoppingButton: Locator;
@@ -26,6 +27,7 @@ export class ProductsPage extends BasePage {
     // for why .features_items matters - it excludes the homepage's
     // "recommended items" carousel, which repeats the same product names).
     this.productNames = page.locator('.features_items .productinfo p');
+    this.productImages = page.locator('.features_items .productinfo img');
     this.searchedProductsHeading = page.getByRole('heading', { name: 'Searched Products' });
     this.cartModal = page.locator('#cartModal');
     this.continueShoppingButton = this.cartModal.getByRole('button', { name: 'Continue Shopping' });

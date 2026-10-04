@@ -105,9 +105,7 @@ test.describe('brands API', () => {
     const brandNames = new Set(brands.map((b) => b.brand));
 
     for (const product of products) {
-      expect(brandNames, `product ${product.id} brand "${product.brand}"`).toContain(
-        product.brand,
-      );
+      expect(brandNames, `product ${product.id} brand "${product.brand}"`).toContain(product.brand);
     }
   });
 

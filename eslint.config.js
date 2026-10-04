@@ -28,6 +28,10 @@ module.exports = tseslint.config(
     },
     rules: {
       ...playwright.configs['flat/recommended'].rules,
+      'playwright/expect-expect': [
+        'warn',
+        { assertFunctionNames: ['expectNoRegressionsBeyondBaseline'] },
+      ],
     },
   },
   {
