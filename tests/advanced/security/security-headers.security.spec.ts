@@ -1,6 +1,8 @@
 import { test as base, expect } from '@fixtures/fixtures';
 import type { NewAccountPayload } from '@api/ApiClient';
+import { endpoints } from '@api/endpoints';
 import { createTestUser } from '@data/users';
+import { HomePage } from '@pages/HomePage';
 import { env } from '@utils/env';
 
 /**
@@ -36,11 +38,34 @@ const test = base.extend<AccountFixtures>({
 });
 
 const SESSION_COOKIE = 'sessionid';
+const SITE_HOST = new URL(env.baseURL).hostname;
+const SITE_PATHS = ['/', '/products', '/product_details/1', '/login', '/view_cart', '/contact_us'];
+const API_PRODUCTS_URL = `${env.apiBaseURL}${endpoints.productsList}`;
+const DAY_IN_SECONDS = 24 * 60 * 60;
 
 test.describe('transport security', () => {
   test('the site is served over HTTPS', async ({ page }) => {
     await page.goto('/');
     expect(page.url()).toMatch(/^https:\/\//);
+  });
+
+  test('the connection uses modern TLS with a valid, matching certificate', async ({ page }) => {
+    const response = await page.goto('/');
+    const tls = await response?.securityDetails();
+
+    await test.info().attach('tls-details', {
+      body: JSON.stringify(tls, null, 2),
+      contentType: 'application/json',
+    });
+
+    // TLS 1.0/1.1 are deprecated and no longer considered safe.
+    expect(tls?.protocol).toMatch(/^TLS 1\.[23]$/);
+    expect(tls?.subjectName).toBe(SITE_HOST);
+    // An expired certificate takes the whole site down for every user, so
+    // this is the early warning. The margin is small because the site's
+    // 90-day certificates are renewed automatically close to expiry.
+    const daysLeft = ((tls?.validTo ?? 0) - Date.now() / 1000) / DAY_IN_SECONDS;
+    expect(daysLeft).toBeGreaterThan(7);
   });
 
   test('plain HTTP is permanently redirected to HTTPS', async ({ request }) => {
@@ -182,9 +207,8 @@ test.describe('login form', () => {
 
     await signupLoginPage.goto();
     await signupLoginPage.login(`unregistered-${existingUser.email}`, existingUser.password);
-    const unknownEmailMessage = await signupLoginPage.loginErrorMessage.innerText();
 
-    expect(unknownEmailMessage).toBe(wrongPasswordMessage);
+    await expect(signupLoginPage.loginErrorMessage).toHaveText(wrongPasswordMessage);
   });
 });
 
@@ -222,9 +246,9 @@ test.describe('cookies and session', () => {
     expect(['Lax', 'Strict']).toContain(session?.sameSite);
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring loggedInUser is what logs in; the value itself isn't needed here.
   test('the session cookie is not readable from page JavaScript', async ({
     page,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring loggedInUser is what logs in; the value itself isn't needed here.
     loggedInUser,
   }) => {
     const visibleToScripts = await page.evaluate(() => document.cookie);
@@ -247,6 +271,162 @@ test.describe('cookies and session', () => {
     await page.reload();
     await expect(homePage.loggedInAs).toBeHidden();
     await expect(homePage.signupLoginLink).toBeVisible();
+  });
+
+  test('a session cookie copied before logout stops working after logout', async ({
+    browser,
+    context,
+    homePage,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring loggedInUser is what logs in; the value itself isn't needed here.
+    loggedInUser,
+  }) => {
+    // Logout must end the session on the server, not just in this browser:
+    // otherwise a cookie that was copied earlier (a shared computer, a
+    // stolen backup) would keep working forever. A second, clean browser
+    // context plays the part of "someone holding the old cookie".
+    const session = (await context.cookies()).find((c) => c.name === SESSION_COOKIE);
+    expect(session).toBeDefined();
+
+    await homePage.logoutLink.click();
+    await expect(homePage.signupLoginLink).toBeVisible();
+
+    const otherContext = await browser.newContext();
+    try {
+      await otherContext.addCookies([
+        { name: SESSION_COOKIE, value: session!.value, domain: session!.domain, path: '/' },
+      ]);
+      const otherPage = await otherContext.newPage();
+      await otherPage.goto(env.baseURL);
+      const otherHome = new HomePage(otherPage);
+
+      await expect(otherHome.signupLoginLink).toBeVisible();
+      await expect(otherHome.loggedInAs).toBeHidden();
+    } finally {
+      await otherContext.close();
+    }
+  });
+
+  test('deleting an account ends its live session', async ({
+    apiClient,
+    homePage,
+    loggedInUser,
+  }) => {
+    const deleted = await apiClient.deleteAccount(loggedInUser.email, loggedInUser.password);
+    expect(deleted.responseCode).toBe(200);
+
+    await homePage.goto();
+
+    await expect(homePage.loggedInAs).toBeHidden();
+  });
+
+  test('the session cookie has a bounded lifetime and is scoped to this site only', async ({
+    context,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring loggedInUser is what logs in; the value itself isn't needed here.
+    loggedInUser,
+  }) => {
+    const session = (await context.cookies()).find((c) => c.name === SESSION_COOKIE);
+    const daysUntilExpiry = ((session?.expires ?? Infinity) - Date.now() / 1000) / DAY_IN_SECONDS;
+
+    // A session that never expires stays valid for whoever finds it later.
+    expect(daysUntilExpiry).toBeLessThanOrEqual(30);
+    // An exact host (no leading dot) keeps the cookie from subdomains.
+    expect(session?.domain).toBe(SITE_HOST);
+  });
+
+  test('credentials are not left in the page source or browser storage after login', async ({
+    page,
+    loggedInUser,
+  }) => {
+    const stored = await page.evaluate(() =>
+      JSON.stringify([{ ...localStorage }, { ...sessionStorage }]),
+    );
+
+    expect(await page.content()).not.toContain(loggedInUser.password);
+    expect(stored).not.toContain(loggedInUser.password);
+  });
+});
+
+test.describe('site-wide checks', () => {
+  test('every page and the API send the anti-sniffing and anti-framing headers', async ({
+    request,
+  }) => {
+    // A header set on the homepage only protects the homepage.
+    for (const url of [...SITE_PATHS, API_PRODUCTS_URL]) {
+      const headers = (await request.get(url)).headers();
+
+      expect(headers['x-content-type-options'], url).toBe('nosniff');
+      expect(headers['x-frame-options'], url).toMatch(/^(DENY|SAMEORIGIN)$/i);
+    }
+  });
+
+  test('every POST form carries a CSRF token and submits to this site over HTTPS', async ({
+    page,
+  }) => {
+    for (const path of SITE_PATHS) {
+      await page.goto(path);
+      const postForms = await page.evaluate(() =>
+        [...document.forms]
+          .filter((form) => form.method === 'post')
+          .map((form) => ({
+            action: form.action,
+            hasCsrfToken: !!form.querySelector('input[name="csrfmiddlewaretoken"]'),
+          })),
+      );
+
+      expect(postForms.length, path).toBeGreaterThan(0);
+      for (const form of postForms) {
+        expect(form.hasCsrfToken, `${path} -> ${form.action}`).toBe(true);
+        expect(new URL(form.action).origin, path).toBe(env.baseURL);
+      }
+    }
+  });
+
+  test('scripts load only from the known set of hosts', async ({ page }) => {
+    // Every third-party script host is code the site runs with full access
+    // to the page. This is the inventory: a new host appearing is a change
+    // someone should have reviewed (the supply-chain attack surface).
+    const knownScriptHosts = new Set([
+      SITE_HOST,
+      'pagead2.googlesyndication.com',
+      'static.cloudflareinsights.com',
+      'maps.google.com',
+    ]);
+    const seenHosts = new Set<string>();
+
+    for (const path of SITE_PATHS) {
+      await page.goto(path);
+      const hosts = await page.evaluate(() =>
+        [...document.scripts].filter((s) => s.src).map((s) => new URL(s.src).hostname),
+      );
+      hosts.forEach((host) => seenHosts.add(host));
+    }
+
+    await test.info().attach('script-hosts', {
+      body: JSON.stringify([...seenHosts], null, 2),
+      contentType: 'application/json',
+    });
+    expect([...seenHosts].filter((host) => !knownScriptHosts.has(host))).toEqual([]);
+  });
+
+  test('an unknown URL does not expose framework debug output', async ({ request }) => {
+    // A debug error page (stack trace, settings, file paths) is a map of
+    // the server's internals. One ordinary mistyped URL is enough to check.
+    const response = await request.get(`/qa-no-such-page-${Date.now()}`);
+    const body = await response.text();
+
+    expect(body).not.toMatch(/Traceback \(most recent call last\)/);
+    expect(body).not.toMatch(/DEBUG = True|Django Version|Exception Value/);
+  });
+
+  test('the API does not grant cross-origin access to other websites', async ({ request }) => {
+    const response = await request.get(API_PRODUCTS_URL, {
+      headers: { Origin: 'https://example.com' },
+    });
+    const allowOrigin = response.headers()['access-control-allow-origin'];
+
+    // Absent is the safe default; "*" or an echo of whatever Origin was
+    // sent would let any website read API responses from a visitor's browser.
+    expect(allowOrigin).toBeUndefined();
   });
 });
 
@@ -291,5 +471,49 @@ test.describe('known security gaps (expected to fail until fixed)', () => {
     const csrf = (await context.cookies()).find((c) => c.name === 'csrftoken');
 
     expect(csrf?.secure).toBe(true);
+  });
+
+  test('logging in again issues a fresh session id', async ({
+    context,
+    homePage,
+    signupLoginPage,
+    loggedInUser,
+  }) => {
+    test.fail(true, 'The same sessionid is reused across logout and re-login (session fixation)');
+    const sessionId = async () =>
+      (await context.cookies()).find((c) => c.name === SESSION_COOKIE)?.value;
+    const firstSessionId = await sessionId();
+
+    await homePage.logoutLink.click();
+    await signupLoginPage.login(loggedInUser.email, loggedInUser.password);
+    await expect(homePage.loggedInAs).toBeVisible();
+
+    expect(await sessionId()).not.toBe(firstSessionId);
+  });
+
+  test('logged-in pages tell browsers and proxies not to cache them', async ({
+    page,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring loggedInUser is what logs in; the value itself isn't needed here.
+    loggedInUser,
+  }) => {
+    test.fail(true, 'No Cache-Control header on authenticated responses');
+    const response = await page.goto('/');
+
+    expect(response?.headers()['cache-control']).toMatch(/no-store|private/);
+  });
+
+  test('the API labels its JSON responses as JSON', async ({ request }) => {
+    test.fail(true, 'JSON is served as text/html (only nosniff stops it rendering as a page)');
+    const response = await request.get(API_PRODUCTS_URL);
+
+    expect(response.headers()['content-type']).toContain('application/json');
+  });
+
+  test('a security.txt tells researchers where to report vulnerabilities', async ({ request }) => {
+    test.fail(true, 'No /.well-known/security.txt (RFC 9116)');
+    const response = await request.get('/.well-known/security.txt');
+
+    expect(response.status()).toBe(200);
+    expect(await response.text()).toMatch(/^Contact:/m);
   });
 });
