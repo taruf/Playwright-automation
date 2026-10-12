@@ -294,3 +294,32 @@ test.describe('reflow at 320px width', () => {
     });
   }
 });
+
+/**
+ * WCAG 1.3.1 / 2.4.6: a single top-level <h1> is how a screen-reader user
+ * jumps straight to a page's main content and gets its outline, the same
+ * way a sighted user scans visual hierarchy - axe's own heading-order rule
+ * only checks that headings don't skip levels, not that exactly one <h1>
+ * exists, so this gap isn't caught by the baseline scans above.
+ *
+ * Measured live, every page in PAGE_BASELINES fails this, for two different
+ * reasons: the homepage renders one visible <h1> plus two CSS-hidden
+ * duplicates (identical text, confirmed via the live DOM - not a guess at
+ * why), and every other page renders no <h1> at all.
+ */
+test.describe('heading structure', () => {
+  for (const { name, path } of PAGE_BASELINES) {
+    test(`${name} (${path}) has exactly one <h1>`, async ({ page }) => {
+      test.fail(
+        true,
+        path === '/'
+          ? 'Known: homepage renders 3 <h1>s (1 visible + 2 hidden duplicates) instead of one (WCAG 1.3.1)'
+          : 'Known: page renders no <h1> at all (WCAG 1.3.1)',
+      );
+
+      await page.goto(path);
+      const h1Count = await page.evaluate(() => document.querySelectorAll('h1').length);
+      expect(h1Count).toBe(1);
+    });
+  }
+});
