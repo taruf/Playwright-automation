@@ -270,6 +270,29 @@ test.describe('known accessibility bugs (expected to fail until fixed)', () => {
     await expect(field).toBeFocused();
     expect(focused.equals(unfocused)).toBe(false);
   });
+
+  test('the cart table exposes its column headers to assistive tech as <th>, not <td>', async ({
+    page,
+    productsPage,
+    cartPage,
+  }) => {
+    test.fail(
+      true,
+      'Header row (Item/Description/Price/Quantity/Total) uses <td>, not <th> or scope - 0 <th> elements measured live (WCAG 1.3.1)',
+    );
+    await productsPage.goto();
+    await productsPage.addToCartFromListing(1);
+    await cartPage.goto();
+    await expect(cartPage.rowFor(1)).toBeVisible();
+
+    // A screen reader announces a <th>'s text when the user navigates into
+    // each data cell in its column/row - without one, "500", "1", "Rs. 500"
+    // are just unlabeled numbers with no "Price"/"Quantity"/"Total" context.
+    const headerCellCount = await page.evaluate(
+      () => document.querySelectorAll('#cart_info_table th').length,
+    );
+    expect(headerCellCount).toBeGreaterThan(0);
+  });
 });
 
 /**
