@@ -126,4 +126,35 @@ test.describe('assertions and auto-waiting', () => {
     // finishes), which is exactly what test.fail() above expects.
     expect(reached).toEqual(['after first soft assertion', 'after second soft assertion']);
   });
+
+  test('toBeHidden retries for absence the same way toBeVisible retries for presence', async ({
+    page,
+  }) => {
+    await page.goto('/');
+
+    // A controlled delay instead of relying on the live site's incidental
+    // timing (unlike several tests above) - an element that exists now and
+    // removes itself 500ms later is enough to tell a retrying assertion
+    // apart from a one-shot check, deterministically.
+    await page.evaluate(() => {
+      const el = document.createElement('div');
+      el.id = 'delayed-hide-demo';
+      el.textContent = 'temporary';
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 500);
+    });
+
+    const locator = page.locator('#delayed-hide-demo');
+
+    // It's genuinely there right now - a one-shot check sees it.
+    // eslint-disable-next-line playwright/prefer-web-first-assertions -- the plain isVisible() read is the deliberate anti-pattern being contrasted below, not production code.
+    expect(await locator.isVisible()).toBe(true);
+
+    // toBeHidden() - Playwright's dedicated matcher for "not there/not
+    // visible", preferred over negating toBeVisible() - is web-first too:
+    // it polls until the element is gone (or times out), the same retrying
+    // toBeVisible() gets for presence. A plain one-shot check taken this
+    // instant would see it as still visible and wrongly fail.
+    await expect(locator).toBeHidden();
+  });
 });
