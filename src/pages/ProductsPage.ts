@@ -8,6 +8,7 @@ export class ProductsPage extends BasePage {
   readonly productNames: Locator;
   readonly productImages: Locator;
   readonly searchedProductsHeading: Locator;
+  readonly listingTitle: Locator;
   readonly cartModal: Locator;
   readonly continueShoppingButton: Locator;
   readonly viewCartLink: Locator;
@@ -29,6 +30,8 @@ export class ProductsPage extends BasePage {
     this.productNames = page.locator('.features_items .productinfo p');
     this.productImages = page.locator('.features_items .productinfo img');
     this.searchedProductsHeading = page.getByRole('heading', { name: 'Searched Products' });
+    // "ALL PRODUCTS", "WOMEN - DRESS PRODUCTS", "BRAND - POLO PRODUCTS", ...
+    this.listingTitle = page.locator('.features_items h2.title');
     this.cartModal = page.locator('#cartModal');
     this.continueShoppingButton = this.cartModal.getByRole('button', { name: 'Continue Shopping' });
     this.viewCartLink = this.cartModal.getByRole('link', { name: 'View Cart' });
@@ -48,6 +51,21 @@ export class ProductsPage extends BasePage {
 
   async openProductDetails(productId: number): Promise<void> {
     await super.goto(`/product_details/${productId}`);
+  }
+
+  /** Sidebar accordion heading ("Women", "Men", "Kids") - expands in place. */
+  categoryToggle(category: string): Locator {
+    return this.page.locator(`#accordian a[href="#${category}"]`);
+  }
+
+  /** A sub-category link inside an expanded heading, e.g. Women > "Dress". */
+  subcategoryLink(category: string, subcategory: string): Locator {
+    return this.page.locator(`#${category} a`, { hasText: subcategory });
+  }
+
+  /** Sidebar brand link. Its text includes the product count, e.g. "(6)Polo". */
+  brandLink(brand: string): Locator {
+    return this.page.locator(`.brands-name a[href="/brand_products/${brand}"]`);
   }
 
   async search(term: string): Promise<void> {
