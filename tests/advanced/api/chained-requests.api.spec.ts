@@ -1,5 +1,26 @@
 import { test, expect } from '@fixtures/fixtures';
 import { createTestUser } from '@data/users';
+import type { Product } from '@api/endpoints';
+
+/**
+ * Pure helper, deliberately kept OUTSIDE any test body: eslint-plugin-playwright's
+ * `no-conditional-in-test` rule flags branching inside a test on principle - a
+ * test's own body should be a straight line of requests and assertions, with
+ * any real logic (like "which brand wins") factored out and named, exactly as
+ * `ProductsPage.addToCartCardByProductId` factors locator logic out of specs.
+ */
+function mostCommonBrand(products: Product[]): { brand: string; count: number } | undefined {
+  const productsPerBrand = new Map<string, number>();
+  for (const product of products) {
+    productsPerBrand.set(product.brand, (productsPerBrand.get(product.brand) ?? 0) + 1);
+  }
+
+  let top: { brand: string; count: number } | undefined;
+  for (const [brand, count] of productsPerBrand) {
+    if (!top || count > top.count) top = { brand, count };
+  }
+  return top;
+}
 
 /**
  * Request chaining: a later request's input comes from an earlier
@@ -10,13 +31,16 @@ import { createTestUser } from '@data/users';
  * automationexercise.com's public API (see docs/target-application.md)
  * doesn't expose pagination - productsList/brandsList always return the
  * full collection in one response, with no page/cursor/limit parameter to
- * chain off. So this file demonstrates the same underlying skill two other
- * ways this API genuinely supports:
+ * chain off. So this file demonstrates the same underlying skill three
+ * other ways this API genuinely supports:
  *   1. a created resource's own identity (email/password) chained from the
  *      create call, into the verify call, into the cleanup call;
  *   2. a value discovered INSIDE one response (a product's name) chained
  *      into the next request's parameters, then cross-checked against that
- *      same original response's id.
+ *      same original response's id;
+ *   3. a value AGGREGATED from one response (the catalog's most common
+ *      brand) chained into a lookup against a second, independent
+ *      response (the brand list), instead of chaining a single item.
  */
 test.describe('chained API requests', () => {
   test("create -> verify login -> delete, each step driven by the previous one's own data", async ({
@@ -88,5 +112,34 @@ test.describe('chained API requests', () => {
     const matched = searchResult.products.find((product) => product.id === targetProduct.id);
     expect(matched).toBeDefined();
     expect(matched?.name).toBe(targetProduct.name);
+  });
+
+  test("the catalog's most common brand, found by aggregating one response, is verified against a second", async ({
+    apiClient,
+  }) => {
+    // REQUEST 1: fetch the full catalog. GET /api/productsList.
+    const { products } = await apiClient.getProductsList();
+
+    // No single item is chained here - a VALUE AGGREGATED from the whole
+    // response is: which brand the most products in today's catalog claim.
+    // The actual counting/branching logic lives in `mostCommonBrand` above,
+    // outside this test body - see why in that function's own comment.
+    const top = mostCommonBrand(products);
+    // Guards the chain below: if the catalog were empty, `top` would stay
+    // `undefined` and the real assertion would pass for the wrong reason
+    // (nothing to look up).
+    expect(top).toBeDefined();
+
+    // REQUEST 2: chained on request 1's aggregated result - `top.brand`
+    // (computed from request 1, not typed as a literal) is looked up
+    // against an entirely independent endpoint. GET /api/brandsList.
+    const { brands } = await apiClient.getBrandsList();
+    const brandNames = new Set(brands.map((brand) => brand.brand));
+
+    // Cross-check: the brand request 1's data says is most common must
+    // genuinely exist in request 2's own, separately-maintained list -
+    // catching a real-world bug class where a product references a brand
+    // that was renamed or removed from the brand catalog itself.
+    expect(brandNames.has(top?.brand as string)).toBe(true);
   });
 });
