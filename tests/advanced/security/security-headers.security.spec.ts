@@ -151,6 +151,34 @@ test.describe('response security headers', () => {
   });
 });
 
+/**
+ * New topic: clickjacking checked BEHAVIORALLY, not just by header value.
+ * The 'X-Frame-Options stops other sites from framing the page' test above
+ * only confirms the header says DENY/SAMEORIGIN - it never proves a browser
+ * actually honors it. This embeds the real site inside an iframe on an
+ * unrelated page (the same attack shape as a clickjacking page) and checks
+ * what a browser actually does with it. Still entirely passive: no payload,
+ * no form submitted, no account touched - just observing default browser
+ * behavior given headers the server already sends.
+ */
+test.describe('clickjacking protection (behavioral)', () => {
+  test('a third-party page cannot render the site inside its own iframe', async ({ page }) => {
+    // This is the real attack shape: an unrelated page tries to frame the
+    // target site inside an invisible/disguised iframe to hijack clicks.
+    // No `page.locator(...)` needed here (and this repo's lint rules ban it
+    // outside page objects anyway) - Playwright's own `frames()` list is
+    // enough to find the iframe we just created.
+    await page.setContent(`<iframe src="${env.baseURL}" style="width:500px;height:500px"></iframe>`);
+    const probeFrame = page.frames().find((frame) => frame !== page.mainFrame());
+
+    // Confirmed live (Chromium, X-Frame-Options: DENY): a framing-denied
+    // navigation lands on the browser's own internal error page instead of
+    // anything from the real response - `expect.poll` waits out the short
+    // delay between the iframe attaching and that navigation completing.
+    await expect.poll(() => probeFrame?.url() ?? '', { timeout: 5_000 }).toMatch(/^chrome-error:/);
+  });
+});
+
 test.describe('login form', () => {
   test('submits credentials by POST to a same-origin HTTPS endpoint', async ({
     signupLoginPage,
