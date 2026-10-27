@@ -1,15 +1,5 @@
 import { test, expect } from '@fixtures/fixtures';
 
-/**
- * Product filter performance: how long a shopper waits each time they
- * narrow the catalog by category or brand from the products page sidebar.
- * Filtering is how most shoppers move around a catalog, and each filter
- * here is a full page load (not an in-page update), so every switch costs
- * a complete round-trip.
- *
- * Like the rest of this folder it is a smoke check, not a load test: one
- * shopper, one pass, generous budgets (see homepage.perf.spec.ts for why).
- */
 const STEP_BUDGET_MS = 15_000;
 const FILTERING_BUDGET_MS = 40_000;
 
@@ -20,12 +10,7 @@ test.describe('product filter performance', () => {
   }) => {
     const timings: Record<string, number> = {};
 
-    // Each step ends on the thing the shopper is waiting to see, so the
-    // number is "time until I can carry on", not "time until the click".
-    // The navigation steps also wait for the load event: the sidebar
-    // accordion is driven by a script, and clicking it before that script
-    // has loaded does nothing (same late-binding caution as the search box
-    // in user-journey.perf.spec.ts).
+    // wait for load after each navigation - the accordion ignores clicks until its script runs
     async function timedStep(name: string, action: () => Promise<void>): Promise<void> {
       await test.step(name, async () => {
         const startedAt = Date.now();
@@ -40,7 +25,6 @@ test.describe('product filter performance', () => {
     });
 
     await timedStep('expand Women', async () => {
-      // In-page only - this times the accordion animation, not the server.
       await productsPage.categoryToggle('Women').click();
       await expect(productsPage.subcategoryLink('Women', 'Dress')).toBeVisible();
     });
@@ -61,9 +45,7 @@ test.describe('product filter performance', () => {
     });
 
     await timedStep('filter by brand Polo', async () => {
-      // The sidebar states each brand's product count, e.g. "(6)Polo" -
-      // checking the list against it proves this step waited for the real
-      // filtered list, not a half-rendered or wrong one.
+      // sidebar label includes the count, e.g. "(6)Polo"
       const brandLabel = await productsPage.brandLink('Polo').innerText();
       const expectedCount = Number(brandLabel.match(/\((\d+)\)/)?.[1]);
 
@@ -79,7 +61,6 @@ test.describe('product filter performance', () => {
       contentType: 'application/json',
     });
 
-    // Soft, so the report shows every slow step rather than only the first.
     for (const [step, ms] of Object.entries(timings)) {
       expect.soft(ms, step).toBeLessThan(STEP_BUDGET_MS);
     }

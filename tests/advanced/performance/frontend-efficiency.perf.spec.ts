@@ -2,17 +2,6 @@ import { test as base, expect } from '@fixtures/fixtures';
 import type { NewAccountPayload } from '@api/ApiClient';
 import { createTestUser } from '@data/users';
 
-/**
- * Front-end efficiency: how the page is built, rather than how fast the
- * network happened to be today. homepage.perf.spec.ts budgets each page
- * load and user-journey.perf.spec.ts times a whole flow; this file covers
- * what those two can't see - slow devices, wasteful images, render-blocking
- * files, growth during repeated use, and the logged-in round-trips.
- *
- * Still a smoke check, not a load test: one user, a handful of page loads.
- * The device throttling is simulated inside the browser, so it costs the
- * site nothing.
- */
 const test = base.extend<{ existingUser: NewAccountPayload }>({
   existingUser: async ({ apiClient }, use) => {
     const user = createTestUser('perf');
@@ -30,13 +19,10 @@ test.describe('low-end mobile device', () => {
     context,
     homePage,
   }) => {
-    // Test machines are far faster than the phones many real users have.
-    // A 4x CPU slowdown is the usual stand-in for a mid-range phone.
+    // 4x CPU slowdown ~ mid-range phone
     const devtools = await context.newCDPSession(page);
     await devtools.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 
-    // Total Blocking Time: for every main-thread task over 50ms, the part
-    // beyond 50ms is time the page could not respond to a tap.
     await page.addInitScript(() => {
       const state = { totalBlockingTime: 0 };
       (window as unknown as { __blocking: typeof state }).__blocking = state;
@@ -61,8 +47,7 @@ test.describe('low-end mobile device', () => {
       contentType: 'application/json',
     });
 
-    // Measured across runs: load 4-13s, blocking 0.5-1s. Generous, because
-    // both the shared site and the throttled CPU add variance.
+    // measured: load 4-13s, TBT 0.5-1s
     expect(metrics.load).toBeGreaterThan(0);
     expect(metrics.load).toBeLessThan(30_000);
     expect(metrics.totalBlockingTime).toBeLessThan(3_000);
@@ -71,8 +56,6 @@ test.describe('low-end mobile device', () => {
 
 test.describe('how the page is built', () => {
   test('no script in the page head blocks rendering', async ({ page, homePage }) => {
-    // A plain <script src> in <head> stops the browser from drawing
-    // anything until that file has downloaded and run.
     await homePage.goto();
 
     const blockingScripts = await page.evaluate(() =>
@@ -85,7 +68,7 @@ test.describe('how the page is built', () => {
   });
 
   test('the number of stylesheets stays within budget', async ({ page, homePage }) => {
-    // Every stylesheet blocks rendering. Measured: 8.
+    // currently 8
     await homePage.goto();
 
     const stylesheetCount = await page.evaluate(
@@ -96,7 +79,6 @@ test.describe('how the page is built', () => {
   });
 
   test('no image on the listing pages is broken', async ({ page, homePage, productsPage }) => {
-    // A broken image is a wasted request and a hole in the page.
     for (const listing of [homePage, productsPage]) {
       await listing.goto();
 
@@ -117,15 +99,10 @@ test.describe('repeated use', () => {
     context,
     productsPage,
   }) => {
-    // A leak shows up as growth per repetition: elements or event listeners
-    // left behind each time. One cycle first, so one-off setup isn't
-    // counted as a leak; then five more, and the totals must not have moved.
     const devtools = await context.newCDPSession(page);
     await devtools.send('Performance.enable');
     const snapshot = async () => {
-      // Force a garbage collection first: listeners that were removed but
-      // not yet collected still count, and would look like a leak
-      // (confirmed - without this line the count reads 14 higher).
+      // GC first, otherwise removed-but-uncollected listeners still count
       await devtools.send('HeapProfiler.collectGarbage');
       const { metrics } = await devtools.send('Performance.getMetrics');
       return {
@@ -140,6 +117,7 @@ test.describe('repeated use', () => {
     };
 
     await productsPage.goto();
+    // warm-up cycle so one-off setup isn't counted
     await openAndClosePopup();
     const before = await snapshot();
 
@@ -152,7 +130,6 @@ test.describe('repeated use', () => {
       body: JSON.stringify({ before, after }, null, 2),
       contentType: 'application/json',
     });
-    // Measured: no growth at all. The small allowance absorbs noise.
     expect(after.domElements).toBeLessThanOrEqual(before.domElements + 5);
     expect(after.eventListeners).toBeLessThanOrEqual(before.eventListeners + 5);
   });
@@ -182,19 +159,12 @@ test.describe('logged-in round-trips', () => {
         { type: 'login-ms', description: String(loginMs) },
         { type: 'logout-ms', description: String(logoutMs) },
       );
-    // Measured: 1-2s each.
     expect(loginMs).toBeLessThan(10_000);
     expect(logoutMs).toBeLessThan(10_000);
   });
 });
 
-/**
- * Known front-end problems on the live site, each confirmed by measurement.
- * `test.fail()` inverts the result: the test passes while the problem
- * exists and turns red the day the site fixes it - the cue to remove the
- * marker and keep the test as a normal regression check (same pattern as
- * the other advanced suites).
- */
+// Known site issues - test.fail() until fixed.
 test.describe('known front-end problems (expected to fail until fixed)', () => {
   test('images are not downloaded far larger than they are displayed', async ({
     page,
@@ -209,8 +179,7 @@ test.describe('known front-end problems (expected to fail until fixed)', () => {
     const oversized = await page.evaluate(() =>
       [...document.images]
         .filter((image) => image.clientWidth > 0)
-        // Twice the displayed width is the allowance for high-density
-        // screens; beyond that the extra pixels are never seen.
+        // 2x allowance for high-DPI screens
         .filter((image) => image.naturalWidth > image.clientWidth * 2)
         .map((image) => `${image.naturalWidth}px shown at ${image.clientWidth}px: ${image.src}`),
     );

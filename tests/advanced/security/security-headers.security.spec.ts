@@ -5,18 +5,8 @@ import { createTestUser } from '@data/users';
 import { HomePage } from '@pages/HomePage';
 import { env } from '@utils/env';
 
-/**
- * "Security testing basics" here means passive, read-only inspection of
- * what the server and browser are already telling us - response headers,
- * cookie flags, form markup - plus ordinary user actions (log in, log out)
- * on an account this suite creates and deletes itself. It is not active
- * scanning: no injection payloads, no fuzzing, no brute force. This site is
- * a public practice target, not something we have authorization to run an
- * intrusive scanner (e.g. an OWASP ZAP active scan) against; a baseline ZAP
- * scan against a target you're authorized to test is the natural next step
- * beyond this file, wired into CI the same way playwright.yml runs this
- * suite.
- */
+// Passive checks only (headers, cookies, markup, normal login/logout).
+// No active scanning - we're not authorized to scan this site.
 interface AccountFixtures {
   existingUser: NewAccountPayload;
   loggedInUser: NewAccountPayload;
@@ -58,12 +48,9 @@ test.describe('transport security', () => {
       contentType: 'application/json',
     });
 
-    // TLS 1.0/1.1 are deprecated and no longer considered safe.
     expect(tls?.protocol).toMatch(/^TLS 1\.[23]$/);
     expect(tls?.subjectName).toBe(SITE_HOST);
-    // An expired certificate takes the whole site down for every user, so
-    // this is the early warning. The margin is small because the site's
-    // 90-day certificates are renewed automatically close to expiry.
+    // certs are 90-day and auto-renewed, so keep the margin small
     const daysLeft = ((tls?.validTo ?? 0) - Date.now() / 1000) / DAY_IN_SECONDS;
     expect(daysLeft).toBeGreaterThan(7);
   });
@@ -73,17 +60,12 @@ test.describe('transport security', () => {
       maxRedirects: 0,
     });
 
-    // 301/308 are the permanent redirects; a 302 would work for users but
-    // tells browsers and crawlers the HTTP URL is still the canonical one.
     expect([301, 308]).toContain(response.status());
     expect(response.headers()['location']).toMatch(/^https:\/\//);
   });
 
   test('pages load no plain-HTTP subresources beyond the known baseline', async ({ page }) => {
-    // Mixed content: an HTTPS page pulling a resource over HTTP hands a
-    // network attacker a way to tamper with it. The site's own templates
-    // link Google Fonts over http:// (confirmed), so that host is the
-    // documented baseline - anything else is a new finding.
+    // Google Fonts is linked over http:// in the site's templates
     const knownInsecureHosts = new Set(['fonts.googleapis.com']);
     const insecureHosts = new Set<string>();
     page.on('request', (request) => {
@@ -151,30 +133,14 @@ test.describe('response security headers', () => {
   });
 });
 
-/**
- * New topic: clickjacking checked BEHAVIORALLY, not just by header value.
- * The 'X-Frame-Options stops other sites from framing the page' test above
- * only confirms the header says DENY/SAMEORIGIN - it never proves a browser
- * actually honors it. This embeds the real site inside an iframe on an
- * unrelated page (the same attack shape as a clickjacking page) and checks
- * what a browser actually does with it. Still entirely passive: no payload,
- * no form submitted, no account touched - just observing default browser
- * behavior given headers the server already sends.
- */
 test.describe('clickjacking protection (behavioral)', () => {
   test('a third-party page cannot render the site inside its own iframe', async ({ page }) => {
-    // This is the real attack shape: an unrelated page tries to frame the
-    // target site inside an invisible/disguised iframe to hijack clicks.
-    // No `page.locator(...)` needed here (and this repo's lint rules ban it
-    // outside page objects anyway) - Playwright's own `frames()` list is
-    // enough to find the iframe we just created.
-    await page.setContent(`<iframe src="${env.baseURL}" style="width:500px;height:500px"></iframe>`);
+    await page.setContent(
+      `<iframe src="${env.baseURL}" style="width:500px;height:500px"></iframe>`,
+    );
     const probeFrame = page.frames().find((frame) => frame !== page.mainFrame());
 
-    // Confirmed live (Chromium, X-Frame-Options: DENY): a framing-denied
-    // navigation lands on the browser's own internal error page instead of
-    // anything from the real response - `expect.poll` waits out the short
-    // delay between the iframe attaching and that navigation completing.
+    // Chromium shows its own error page when framing is denied
     await expect.poll(() => probeFrame?.url() ?? '', { timeout: 5_000 }).toMatch(/^chrome-error:/);
   });
 });
@@ -190,8 +156,6 @@ test.describe('login form', () => {
       action: input.form?.action,
     }));
 
-    // A GET form would put the password in the URL - and from there into
-    // browser history, server logs and Referer headers.
     expect(form.method).toBe('post');
     expect(form.action).toMatch(new RegExp(`^${env.baseURL}/`));
   });
@@ -227,8 +191,6 @@ test.describe('login form', () => {
     signupLoginPage,
     existingUser,
   }) => {
-    // If "wrong password" and "no such account" read differently, the login
-    // form doubles as a tool for checking which emails have accounts.
     await signupLoginPage.goto();
     await signupLoginPage.login(existingUser.email, `${existingUser.password}-wrong`);
     const wrongPasswordMessage = await signupLoginPage.loginErrorMessage.innerText();
@@ -259,24 +221,21 @@ test.describe('cookies and session', () => {
       contentType: 'application/json',
     });
 
-    // No session should exist until someone actually logs in.
     expect(cookies.map((c) => c.name)).not.toContain(SESSION_COOKIE);
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring loggedInUser is what logs in; the value itself isn't needed here.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- fixture logs in
   test('the session cookie is HttpOnly and SameSite', async ({ context, loggedInUser }) => {
     const session = (await context.cookies()).find((c) => c.name === SESSION_COOKIE);
 
     expect(session).toBeDefined();
-    // HttpOnly keeps the cookie away from injected scripts; SameSite keeps
-    // the browser from attaching it to requests other sites trigger.
     expect(session?.httpOnly).toBe(true);
     expect(['Lax', 'Strict']).toContain(session?.sameSite);
   });
 
   test('the session cookie is not readable from page JavaScript', async ({
     page,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring loggedInUser is what logs in; the value itself isn't needed here.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- fixture logs in
     loggedInUser,
   }) => {
     const visibleToScripts = await page.evaluate(() => document.cookie);
@@ -294,7 +253,6 @@ test.describe('cookies and session', () => {
     await homePage.logoutLink.click();
     await expect(page).toHaveURL(/\/login$/);
 
-    // The Back button must not resurrect an authenticated view.
     await page.goBack();
     await page.reload();
     await expect(homePage.loggedInAs).toBeHidden();
@@ -305,19 +263,16 @@ test.describe('cookies and session', () => {
     browser,
     context,
     homePage,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring loggedInUser is what logs in; the value itself isn't needed here.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- fixture logs in
     loggedInUser,
   }) => {
-    // Logout must end the session on the server, not just in this browser:
-    // otherwise a cookie that was copied earlier (a shared computer, a
-    // stolen backup) would keep working forever. A second, clean browser
-    // context plays the part of "someone holding the old cookie".
     const session = (await context.cookies()).find((c) => c.name === SESSION_COOKIE);
     expect(session).toBeDefined();
 
     await homePage.logoutLink.click();
     await expect(homePage.signupLoginLink).toBeVisible();
 
+    // replay the old cookie in a fresh context
     const otherContext = await browser.newContext();
     try {
       await otherContext.addCookies([
@@ -349,15 +304,13 @@ test.describe('cookies and session', () => {
 
   test('the session cookie has a bounded lifetime and is scoped to this site only', async ({
     context,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring loggedInUser is what logs in; the value itself isn't needed here.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- fixture logs in
     loggedInUser,
   }) => {
     const session = (await context.cookies()).find((c) => c.name === SESSION_COOKIE);
     const daysUntilExpiry = ((session?.expires ?? Infinity) - Date.now() / 1000) / DAY_IN_SECONDS;
 
-    // A session that never expires stays valid for whoever finds it later.
     expect(daysUntilExpiry).toBeLessThanOrEqual(30);
-    // An exact host (no leading dot) keeps the cookie from subdomains.
     expect(session?.domain).toBe(SITE_HOST);
   });
 
@@ -378,7 +331,6 @@ test.describe('site-wide checks', () => {
   test('every page and the API send the anti-sniffing and anti-framing headers', async ({
     request,
   }) => {
-    // A header set on the homepage only protects the homepage.
     for (const url of [...SITE_PATHS, API_PRODUCTS_URL]) {
       const headers = (await request.get(url)).headers();
 
@@ -410,9 +362,6 @@ test.describe('site-wide checks', () => {
   });
 
   test('scripts load only from the known set of hosts', async ({ page }) => {
-    // Every third-party script host is code the site runs with full access
-    // to the page. This is the inventory: a new host appearing is a change
-    // someone should have reviewed (the supply-chain attack surface).
     const knownScriptHosts = new Set([
       SITE_HOST,
       'pagead2.googlesyndication.com',
@@ -437,8 +386,6 @@ test.describe('site-wide checks', () => {
   });
 
   test('an unknown URL does not expose framework debug output', async ({ request }) => {
-    // A debug error page (stack trace, settings, file paths) is a map of
-    // the server's internals. One ordinary mistyped URL is enough to check.
     const response = await request.get(`/qa-no-such-page-${Date.now()}`);
     const body = await response.text();
 
@@ -452,20 +399,11 @@ test.describe('site-wide checks', () => {
     });
     const allowOrigin = response.headers()['access-control-allow-origin'];
 
-    // Absent is the safe default; "*" or an echo of whatever Origin was
-    // sent would let any website read API responses from a visitor's browser.
     expect(allowOrigin).toBeUndefined();
   });
 });
 
-/**
- * Known gaps in the live site's configuration, each confirmed by
- * measurement. `test.fail()` inverts the result: the test passes while the
- * gap exists and turns red the day the site closes it - the cue to remove
- * the marker and keep the test as a normal regression check. That keeps CI
- * green on a site we don't own while the report still lists every gap by
- * name (see the same pattern in accessibility/homepage.a11y.spec.ts).
- */
+// Known gaps on the site. test.fail() keeps these green until they're fixed.
 test.describe('known security gaps (expected to fail until fixed)', () => {
   test('Strict-Transport-Security tells browsers to never use plain HTTP', async ({ request }) => {
     test.fail(true, 'No HSTS header: the first visit can still be downgraded to HTTP');
@@ -485,7 +423,7 @@ test.describe('known security gaps (expected to fail until fixed)', () => {
     expect(response.headers()).not.toHaveProperty('x-powered-by');
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring loggedInUser is what logs in; the value itself isn't needed here.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- fixture logs in
   test('the session cookie is marked Secure', async ({ context, loggedInUser }) => {
     test.fail(true, 'sessionid lacks Secure: it would be sent over plain HTTP too');
     const session = (await context.cookies()).find((c) => c.name === SESSION_COOKIE);
@@ -521,7 +459,7 @@ test.describe('known security gaps (expected to fail until fixed)', () => {
 
   test('logged-in pages tell browsers and proxies not to cache them', async ({
     page,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring loggedInUser is what logs in; the value itself isn't needed here.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- fixture logs in
     loggedInUser,
   }) => {
     test.fail(true, 'No Cache-Control header on authenticated responses');

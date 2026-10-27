@@ -3,11 +3,6 @@ import { createTestUser } from '@data/users';
 import { endpoints } from '@api/endpoints';
 import { env } from '@utils/env';
 
-/**
- * Account endpoints: the full create -> verify -> delete lifecycle, plus the
- * negative paths. Each test creates its own uniquely-named user and deletes
- * it, so tests stay independent and safe to run in parallel.
- */
 test.describe('accounts API', () => {
   test('an account goes through create -> verify login -> delete -> gone', async ({
     apiClient,
@@ -74,8 +69,6 @@ test.describe('accounts API', () => {
   });
 
   test('verifyLogin without an email parameter is a 400, not a 404', async ({ request }) => {
-    // Missing input and wrong input are different failures - an API that
-    // answers both with "User not found!" hides client bugs.
     const response = await request.post(`${env.apiBaseURL}${endpoints.verifyLogin}`, {
       form: { password: 'whatever' },
     });

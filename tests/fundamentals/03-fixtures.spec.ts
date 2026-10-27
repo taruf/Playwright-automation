@@ -20,23 +20,15 @@ test.describe('fixtures and organization', () => {
     apiClient,
     homePage,
   }) => {
-    // Fixtures aren't limited to page objects - apiClient wraps Playwright's
-    // `request` context the same way, so a test can mix API and UI fixtures
-    // freely (see hybrid/api-setup-ui-verify.spec.ts for a full example).
+    // apiClient and UI fixtures can be used in the same test
     const { responseCode, products } = await apiClient.getProductsList();
     expect(responseCode).toBe(200);
     expect(products.length).toBeGreaterThan(5);
 
-    // A couple of shape checks, not just "some products came back" - see
-    // advanced/api/products.api.spec.ts for the full beyond-status-code
-    // treatment of this same endpoint.
     const [firstProduct] = products;
     expect(typeof firstProduct.id).toBe('number');
     expect(firstProduct.price).toMatch(/^Rs\. \d+$/);
 
-    // The point of this test: homePage (from this describe's beforeEach) is
-    // still a live UI fixture here too - apiClient adds to the fixture set,
-    // it doesn't replace it.
     await expect(homePage.productsLink).toBeVisible();
   });
 

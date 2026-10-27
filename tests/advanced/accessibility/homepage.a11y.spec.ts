@@ -2,20 +2,8 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { test, expect } from '@fixtures/fixtures';
 
-/**
- * Accessibility checks don't need cross-browser coverage the way visual
- * rendering does, so this file's ".a11y.spec.ts" name keeps it chromium-only
- * (see playwright.config.ts).
- *
- * Every page on this site genuinely has real WCAG violations today (counts
- * below were measured with ad networks blocked, and were identical across
- * repeated runs). Failing the suite on every one of them would just make it
- * permanently red on a site we don't own and can't fix, which teaches
- * "ignore the accessibility test" rather than anything useful. The
- * professional pattern for a third-party/legacy target you can't remediate
- * immediately is a documented baseline: fail only on a *regression* past
- * what's already known, so a genuinely new violation still gets caught.
- */
+// The site has existing WCAG violations we can't fix, so we only fail on
+// counts above this baseline (measured with ads blocked).
 type Baseline = Record<string, number>;
 
 const PAGE_BASELINES: { name: string; path: string; baseline: Baseline }[] = [
@@ -45,8 +33,6 @@ async function expectNoRegressionsBeyondBaseline(page: Page, baseline: Baseline)
     ['critical', 'serious'].includes(violation.impact ?? ''),
   );
 
-  // Attach the full report so a failure is debuggable from the HTML
-  // report, not just a bare count in the terminal.
   await test.info().attach('axe-results', {
     body: JSON.stringify(results.violations, null, 2),
     contentType: 'application/json',
@@ -74,11 +60,6 @@ test.describe('axe scan - no new critical or serious violations beyond the known
   }
 });
 
-/**
- * A page-load scan only sees the page's initial DOM. Popups, error messages
- * and filled-in carts are rendered later, so each needs its own scan in
- * that state - otherwise their violations are simply never looked at.
- */
 test.describe('axe scan - interactive states', () => {
   test('products page with the "Added!" cart popup open', async ({ page, productsPage }) => {
     await productsPage.goto();
@@ -122,11 +103,6 @@ test.describe('axe scan - interactive states', () => {
   });
 });
 
-/**
- * axe only catches what can be detected statically from the DOM. These
- * checks cover things a real keyboard or screen-reader user depends on that
- * a rule engine can't fully judge on its own.
- */
 test.describe('manual accessibility checks', () => {
   test('every page declares a document language for screen readers', async ({ page }) => {
     for (const { path } of PAGE_BASELINES) {
@@ -145,7 +121,6 @@ test.describe('manual accessibility checks', () => {
     await signupLoginPage.loginEmailInput.focus();
     await page.keyboard.type('nobody@example.com');
 
-    // Tab order must follow the visual order: email -> password -> button.
     await page.keyboard.press('Tab');
     await expect(signupLoginPage.loginPasswordInput).toBeFocused();
     await page.keyboard.type('wrong-password');
@@ -154,13 +129,11 @@ test.describe('manual accessibility checks', () => {
     await expect(signupLoginPage.loginButton).toBeFocused();
     await page.keyboard.press('Enter');
 
-    // Reaching the server's error proves Enter actually submitted the form.
     await expect(signupLoginPage.loginErrorMessage).toBeVisible();
   });
 
   test('login form fields expose an accessible name', async ({ signupLoginPage }) => {
-    // The site uses placeholders instead of <label>s - this asserts that
-    // assistive tech still gets a name for each field from somewhere.
+    // fields use placeholders, not <label>s
     await signupLoginPage.goto();
 
     await expect(signupLoginPage.loginEmailInput).toHaveAccessibleName(/email/i);
@@ -181,8 +154,6 @@ test.describe('manual accessibility checks', () => {
   });
 
   test('every page has a distinct, non-empty title', async ({ page }) => {
-    // The title is the first thing a screen reader announces on page load
-    // and what identifies the tab - two pages sharing one is ambiguous.
     const titles: string[] = [];
     for (const { path } of PAGE_BASELINES) {
       await page.goto(path);
@@ -207,13 +178,7 @@ test.describe('manual accessibility checks', () => {
   });
 });
 
-/**
- * Known accessibility bugs on the live site, each confirmed by measurement.
- * `test.fail()` inverts the result: the test passes while the bug exists
- * and turns red the day the site fixes it - the cue to remove the marker
- * and keep the test as a normal regression check. That's the same "known
- * baseline" idea as the axe counts above, applied to a single behavior.
- */
+// Known site bugs. test.fail() keeps these green until the site fixes them.
 test.describe('known accessibility bugs (expected to fail until fixed)', () => {
   test('the cart popup is exposed to assistive tech as a dialog', async ({ productsPage }) => {
     test.fail(true, 'No role="dialog" / aria-modal on #cartModal (WCAG 4.1.2)');
@@ -263,8 +228,7 @@ test.describe('known accessibility bugs (expected to fail until fixed)', () => {
 
     const unfocused = await field.screenshot();
     await field.focus();
-    // Playwright hides the text caret in screenshots by default, so any
-    // pixel difference here comes from focus styling alone.
+    // caret is hidden in screenshots, so any diff is focus styling
     const focused = await field.screenshot();
 
     await expect(field).toBeFocused();
@@ -285,9 +249,6 @@ test.describe('known accessibility bugs (expected to fail until fixed)', () => {
     await cartPage.goto();
     await expect(cartPage.rowFor(1)).toBeVisible();
 
-    // A screen reader announces a <th>'s text when the user navigates into
-    // each data cell in its column/row - without one, "500", "1", "Rs. 500"
-    // are just unlabeled numbers with no "Price"/"Quantity"/"Total" context.
     const headerCellCount = await page.evaluate(
       () => document.querySelectorAll('#cart_info_table th').length,
     );
@@ -295,10 +256,7 @@ test.describe('known accessibility bugs (expected to fail until fixed)', () => {
   });
 });
 
-/**
- * WCAG 1.4.10 (Reflow): content must work at 320 CSS px wide - the width of
- * a desktop browser zoomed to 400% - without scrolling sideways.
- */
+// WCAG 1.4.10: 320px wide = desktop at 400% zoom
 const KNOWN_REFLOW_FAILURES = new Set(['/products']);
 
 test.describe('reflow at 320px width', () => {
@@ -318,18 +276,7 @@ test.describe('reflow at 320px width', () => {
   }
 });
 
-/**
- * WCAG 1.3.1 / 2.4.6: a single top-level <h1> is how a screen-reader user
- * jumps straight to a page's main content and gets its outline, the same
- * way a sighted user scans visual hierarchy - axe's own heading-order rule
- * only checks that headings don't skip levels, not that exactly one <h1>
- * exists, so this gap isn't caught by the baseline scans above.
- *
- * Measured live, every page in PAGE_BASELINES fails this, for two different
- * reasons: the homepage renders one visible <h1> plus two CSS-hidden
- * duplicates (identical text, confirmed via the live DOM - not a guess at
- * why), and every other page renders no <h1> at all.
- */
+// axe doesn't check for exactly one <h1>; every page currently fails this
 test.describe('heading structure', () => {
   for (const { name, path } of PAGE_BASELINES) {
     test(`${name} (${path}) has exactly one <h1>`, async ({ page }) => {

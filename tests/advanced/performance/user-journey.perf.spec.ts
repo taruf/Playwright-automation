@@ -1,14 +1,5 @@
 import { test, expect } from '@fixtures/fixtures';
 
-/**
- * Journey-level performance: how long a real shopper waits across a whole
- * flow, not just on one page load (that's homepage.perf.spec.ts). A site can
- * pass every single-page budget and still feel slow if each of six steps
- * takes three seconds - this is the test that notices.
- *
- * Like the rest of this folder it is a smoke check, not a load test: one
- * user, one pass, generous budgets (see homepage.perf.spec.ts for why).
- */
 const STEP_BUDGET_MS = 10_000;
 const JOURNEY_BUDGET_MS = 35_000;
 const PRODUCT_ID = 1;
@@ -22,8 +13,6 @@ test.describe('shopping journey performance', () => {
   }) => {
     const timings: Record<string, number> = {};
 
-    // Each step ends on the thing the shopper is waiting to see, so the
-    // number is "time until I can carry on", not "time until the click".
     async function timedStep(name: string, action: () => Promise<void>): Promise<void> {
       await test.step(name, async () => {
         const startedAt = Date.now();
@@ -39,9 +28,7 @@ test.describe('shopping journey performance', () => {
 
     await timedStep('go to products', async () => {
       await homePage.productsLink.click();
-      // Waits for the load event, not just the search box: the site attaches
-      // the Search button's click handler late, so a click before load is
-      // silently ignored (confirmed - it made this test fail intermittently).
+      // search click is ignored until the page has fully loaded
       await page.waitForURL(/\/products$/);
       await expect(productsPage.searchInput).toBeVisible();
     });
@@ -72,7 +59,6 @@ test.describe('shopping journey performance', () => {
       contentType: 'application/json',
     });
 
-    // Soft, so the report shows every slow step rather than only the first.
     for (const [step, ms] of Object.entries(timings)) {
       expect.soft(ms, step).toBeLessThan(STEP_BUDGET_MS);
     }
@@ -86,9 +72,7 @@ test.describe('slow network', () => {
     context,
     signupLoginPage,
   }) => {
-    // Throttling happens inside the browser (Chrome DevTools Protocol), so
-    // it simulates a slow user without putting any extra load on the site.
-    // Roughly "slow 4G": 1.6 Mbit/s down, 750 kbit/s up, 150ms latency.
+    // roughly slow 4G
     const devtools = await context.newCDPSession(page);
     await devtools.send('Network.emulateNetworkConditions', {
       offline: false,
