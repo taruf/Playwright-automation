@@ -1,6 +1,28 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
-import { test, expect } from '@fixtures/fixtures';
+import { test as base, expect } from '@fixtures/fixtures';
+import type { NewAccountPayload } from '@api/ApiClient';
+import { createTestUser } from '@data/users';
+
+const test = base.extend<{ newUser: NewAccountPayload; shopperWithCart: NewAccountPayload }>({
+  // UI signup creates the account; this just deletes it afterwards
+  newUser: async ({ apiClient }, use) => {
+    const user = createTestUser('a11y-signup');
+    await use(user);
+    await apiClient.deleteAccount(user.email, user.password);
+  },
+  shopperWithCart: async ({ apiClient, signupLoginPage, homePage, productsPage }, use) => {
+    const user = createTestUser('a11y-checkout');
+    expect((await apiClient.createAccount(user)).responseCode).toBe(201);
+    await signupLoginPage.goto();
+    await signupLoginPage.login(user.email, user.password);
+    await expect(homePage.loggedInAs).toBeVisible();
+    await productsPage.goto();
+    await productsPage.addToCartFromListing(1);
+    await use(user);
+    await apiClient.deleteAccount(user.email, user.password);
+  },
+});
 
 // The site has existing WCAG violations we can't fix, so we only fail on
 // counts above this baseline (measured with ads blocked).
@@ -24,6 +46,18 @@ const PAGE_BASELINES: { name: string; path: string; baseline: Baseline }[] = [
     name: 'contact us',
     path: '/contact_us',
     baseline: { 'button-name': 1, 'color-contrast': 1, label: 1 },
+  },
+  { name: 'test cases', path: '/test_cases', baseline: { 'button-name': 1, 'color-contrast': 3 } },
+  { name: 'API list', path: '/api_list', baseline: { 'button-name': 1, 'color-contrast': 3 } },
+  {
+    name: 'category listing',
+    path: '/category_products/1',
+    baseline: { 'button-name': 1, 'color-contrast': 6 },
+  },
+  {
+    name: 'brand listing',
+    path: '/brand_products/Polo',
+    baseline: { 'button-name': 1, 'color-contrast': 9 },
   },
 ];
 
@@ -100,6 +134,52 @@ test.describe('axe scan - interactive states', () => {
     await productsPage.search('Dress');
     await expect(productsPage.searchedProductsHeading).toBeVisible();
     await expectNoRegressionsBeyondBaseline(page, { 'button-name': 2, 'color-contrast': 10 });
+  });
+});
+
+test.describe('axe scan - signup and checkout', () => {
+  test('signup details form and account created page', async ({
+    page,
+    signupLoginPage,
+    newUser,
+  }) => {
+    await signupLoginPage.goto();
+    await signupLoginPage.startSignup(newUser.name, newUser.email);
+    await expect(signupLoginPage.createAccountButton).toBeVisible();
+    // contrast count varied 1-11 between runs
+    await expectNoRegressionsBeyondBaseline(page, {
+      'button-name': 1,
+      'color-contrast': 11,
+      label: 1,
+      'select-name': 3,
+    });
+
+    await signupLoginPage.completeAccountInformation(newUser);
+    await expect(
+      signupLoginPage.confirmationHeading.filter({ hasText: /account created/i }),
+    ).toBeVisible();
+    await expectNoRegressionsBeyondBaseline(page, { 'button-name': 1 });
+  });
+
+  test('checkout and payment pages', async ({
+    page,
+    cartPage,
+    checkoutPage,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- fixture logs in and fills the cart
+    shopperWithCart,
+  }) => {
+    await cartPage.goto();
+    await cartPage.proceedToCheckout();
+    await expect(checkoutPage.placeOrderLink).toBeVisible();
+    await expectNoRegressionsBeyondBaseline(page, {
+      'button-name': 1,
+      'color-contrast': 11,
+      label: 1,
+    });
+
+    await checkoutPage.placeOrder();
+    await expect(checkoutPage.confirmPaymentButton).toBeVisible();
+    await expectNoRegressionsBeyondBaseline(page, { 'button-name': 1, label: 2 });
   });
 });
 
