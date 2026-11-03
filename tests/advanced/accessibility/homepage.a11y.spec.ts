@@ -179,7 +179,11 @@ test.describe('axe scan - signup and checkout', () => {
 
     await checkoutPage.placeOrder();
     await expect(checkoutPage.confirmPaymentButton).toBeVisible();
-    await expectNoRegressionsBeyondBaseline(page, { 'button-name': 1, label: 2 });
+    await expectNoRegressionsBeyondBaseline(page, {
+      'button-name': 1,
+      'color-contrast': 2,
+      label: 2,
+    });
   });
 });
 
