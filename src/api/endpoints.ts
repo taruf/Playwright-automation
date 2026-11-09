@@ -10,6 +10,7 @@ export const endpoints = {
   verifyLogin: '/verifyLogin',
   createAccount: '/createAccount',
   deleteAccount: '/deleteAccount',
+  getUserDetailByEmail: '/getUserDetailByEmail',
 } as const;
 
 export interface Product {
@@ -41,4 +42,10 @@ export interface BrandsListResponse {
 export interface MessageResponse {
   responseCode: number;
   message: string;
+}
+
+export interface UserDetailResponse {
+  responseCode: number;
+  message?: string;
+  user?: Record<string, string | number>;
 }

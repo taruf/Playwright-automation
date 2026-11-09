@@ -4,6 +4,7 @@ import {
   type BrandsListResponse,
   type MessageResponse,
   type ProductsListResponse,
+  type UserDetailResponse,
 } from './endpoints';
 
 export interface NewAccountPayload {
@@ -64,6 +65,13 @@ export class ApiClient {
   async createAccount(payload: NewAccountPayload): Promise<MessageResponse> {
     const response = await this.request.post(`${this.baseURL}${endpoints.createAccount}`, {
       form: payload as unknown as Record<string, string>,
+    });
+    return response.json();
+  }
+
+  async getUserDetailByEmail(email: string): Promise<UserDetailResponse> {
+    const response = await this.request.get(`${this.baseURL}${endpoints.getUserDetailByEmail}`, {
+      params: { email },
     });
     return response.json();
   }
