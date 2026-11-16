@@ -69,6 +69,13 @@ export class ApiClient {
     return response.json();
   }
 
+  async updateAccount(payload: NewAccountPayload): Promise<MessageResponse> {
+    const response = await this.request.put(`${this.baseURL}${endpoints.updateAccount}`, {
+      form: payload as unknown as Record<string, string>,
+    });
+    return response.json();
+  }
+
   async getUserDetailByEmail(email: string): Promise<UserDetailResponse> {
     const response = await this.request.get(`${this.baseURL}${endpoints.getUserDetailByEmail}`, {
       params: { email },

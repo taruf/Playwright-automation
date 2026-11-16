@@ -12,6 +12,7 @@ export interface CardDetails {
 export class CheckoutPage extends BasePage {
   readonly orderCommentInput: Locator;
   readonly placeOrderLink: Locator;
+  readonly deliveryAddress: Locator;
 
   // /payment
   readonly nameOnCardInput: Locator;
@@ -26,6 +27,7 @@ export class CheckoutPage extends BasePage {
     super(page);
     this.orderCommentInput = page.locator('textarea[name="message"]');
     this.placeOrderLink = page.getByRole('link', { name: 'Place Order' });
+    this.deliveryAddress = page.locator('#address_delivery');
 
     this.nameOnCardInput = page.locator('input[name="name_on_card"]');
     this.cardNumberInput = page.locator('input[name="card_number"]');

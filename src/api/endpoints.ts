@@ -9,6 +9,7 @@ export const endpoints = {
   searchProduct: '/searchProduct',
   verifyLogin: '/verifyLogin',
   createAccount: '/createAccount',
+  updateAccount: '/updateAccount',
   deleteAccount: '/deleteAccount',
   getUserDetailByEmail: '/getUserDetailByEmail',
 } as const;
