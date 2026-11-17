@@ -16,6 +16,8 @@ export class ProductsPage extends BasePage {
   // product detail page
   readonly productName: Locator;
   readonly productPrice: Locator;
+  readonly productCategory: Locator;
+  readonly productBrand: Locator;
   readonly quantityInput: Locator;
   readonly addToCartButton: Locator;
 
@@ -40,6 +42,8 @@ export class ProductsPage extends BasePage {
     // <span>s in the same block as the quantity input and "Add to cart"
     // button (confirmed via the live product_details markup).
     this.productPrice = page.locator('.product-information span span').first();
+    this.productCategory = page.locator('.product-information p', { hasText: 'Category:' });
+    this.productBrand = page.locator('.product-information p', { hasText: 'Brand:' });
     this.quantityInput = page.locator('#quantity');
     this.addToCartButton = page.locator('button.cart');
   }

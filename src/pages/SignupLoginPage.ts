@@ -16,6 +16,7 @@ export class SignupLoginPage extends BasePage {
   readonly signupNameInput: Locator;
   readonly signupEmailInput: Locator;
   readonly signupButton: Locator;
+  readonly signupErrorMessage: Locator;
 
   // /signup (account information form)
   readonly genderMrRadio: Locator;
@@ -48,6 +49,7 @@ export class SignupLoginPage extends BasePage {
     this.signupNameInput = page.locator('input[data-qa="signup-name"]');
     this.signupEmailInput = page.locator('input[data-qa="signup-email"]');
     this.signupButton = page.locator('button[data-qa="signup-button"]');
+    this.signupErrorMessage = page.getByText(/email address already exist/i);
 
     this.genderMrRadio = page.locator('#id_gender1');
     this.passwordInput = page.locator('#password');
