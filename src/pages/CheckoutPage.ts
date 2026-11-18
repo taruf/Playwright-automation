@@ -13,6 +13,7 @@ export class CheckoutPage extends BasePage {
   readonly orderCommentInput: Locator;
   readonly placeOrderLink: Locator;
   readonly deliveryAddress: Locator;
+  readonly billingAddress: Locator;
 
   // /payment
   readonly nameOnCardInput: Locator;
@@ -28,6 +29,7 @@ export class CheckoutPage extends BasePage {
     this.orderCommentInput = page.locator('textarea[name="message"]');
     this.placeOrderLink = page.getByRole('link', { name: 'Place Order' });
     this.deliveryAddress = page.locator('#address_delivery');
+    this.billingAddress = page.locator('#address_invoice');
 
     this.nameOnCardInput = page.locator('input[name="name_on_card"]');
     this.cardNumberInput = page.locator('input[name="card_number"]');
