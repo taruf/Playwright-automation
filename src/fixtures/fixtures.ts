@@ -26,7 +26,7 @@ interface Fixtures {
 // found). Blocking their known hosts is the actual fix, at the source,
 // rather than trying to out-guess what a live ad script might do to the DOM
 // in any given run.
-const AD_NETWORK_HOSTS =
+export const AD_NETWORK_HOSTS =
   /googlesyndication\.com|doubleclick\.net|googleadservices\.com|fundingchoicesmessages\.google\.com/;
 
 /**
